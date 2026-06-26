@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(unzip -o \"Spot the phish feedback part 1.docx\" -d /tmp/docx_extract)",
+      "Bash(ls /tmp/docx_extract/word/)",
+      "Bash(cygpath -w /tmp/docx_extract/word/media/image1.png)",
+      "Bash(python -c \"import tempfile,os; print\\(os.path.abspath\\('/tmp/docx_extract/word/media/image1.png'\\)\\)\")",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(curl -s http://localhost:3000/)",
+      "Bash(rm -f scripts/_verify.ts)",
+      "Bash(rmdir scripts *)",
+      "Bash(rm -rf dist)",
+      "Bash(netstat -ano)",
+      "Bash(npx tsx *)",
+      "Bash(rm -f scripts/_verify2.ts)",
+      "Bash(curl -s -o /dev/null -w \"Dev server on :3000 -> HTTP %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(ls -la *.png)",
+      "Bash(find . -maxdepth 2 -iname \"*agent*\")",
+      "Bash(rm -f scripts/_verify3.ts)",
+      "Bash(curl -s -o /dev/null -w \"Dev server :3000 -> HTTP %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(mongod --version)",
+      "Read(//c/Program Files/Docker/Docker/**)",
+      "Bash(docker info *)"
+    ]
+  }
+}

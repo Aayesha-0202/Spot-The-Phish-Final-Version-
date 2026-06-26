@@ -1,0 +1,6 @@
+{
+  "name": "Spot the Phish",
+  "description": "A fast-classification game to test Visual Trust Calibration by identifying digital fraud.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
