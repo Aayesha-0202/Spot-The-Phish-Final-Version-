@@ -5,8 +5,9 @@ import { ROUND_SUMMARIES } from '../../data/stimuli';
 import { motion } from 'framer-motion';
 
 export const InterRoundScreen = () => {
-  const { currentRound, score, streak, setPhase } = useGameStore();
+  const { currentRound, score, streak, setPhase, gameStartTime } = useGameStore();
   const [countdown, setCountdown] = useState(3);
+  const [elapsedTime, setElapsedTime] = useState(0);
   const roundData = ROUND_SUMMARIES[currentRound] || ROUND_SUMMARIES[1];
 
   useEffect(() => {
@@ -17,6 +18,22 @@ export const InterRoundScreen = () => {
       setPhase('PLAYING');
     }
   }, [countdown, setPhase]);
+
+  useEffect(() => {
+    if (!gameStartTime) return;
+    setElapsedTime(Date.now() - gameStartTime);
+    const timer = setInterval(() => {
+      setElapsedTime(Date.now() - gameStartTime);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [gameStartTime]);
+
+  const formatElapsedTime = (ms: number) => {
+    const totalSec = Math.floor(ms / 1000);
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-4 relative z-10 w-full text-center overflow-hidden bg-cyber-grid bg-[#0d0d1a]">
@@ -48,17 +65,21 @@ export const InterRoundScreen = () => {
              &gt; {roundData.teaser}
            </p>
            
-           <div className="grid grid-cols-2 gap-8 mb-16 max-w-2xl mx-auto">
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16 max-w-3xl mx-auto">
              <div className="bg-black/50 p-6 border-l-4 border-cyan-400 cyber-clip">
                 <div className="text-[10px] md:text-xs font-bold tracking-[0.2em] uppercase text-cyan-400/70 mb-2">Current Score</div>
-                <div className="text-4xl md:text-5xl font-mono font-black text-white">{score}</div>
+                <div className="text-3xl md:text-4xl font-mono font-black text-white">{score}</div>
              </div>
              <div className="bg-black/50 p-6 border-l-4 border-pink-500 cyber-clip">
                 <div className="text-[10px] md:text-xs font-bold tracking-[0.2em] uppercase text-pink-400/70 mb-2">Active Streak</div>
-                <div className="text-4xl md:text-5xl font-mono font-black text-pink-500 drop-shadow-md flex items-center justify-center gap-1">
-                  {streak}<span className="text-2xl md:text-3xl">×</span>
-                  {streak === 0 && <span className="text-base md:text-lg text-pink-500/50 font-mono font-bold uppercase tracking-widest">no streak</span>}
+                <div className="text-3xl md:text-4xl font-mono font-black text-pink-500 drop-shadow-md flex items-center justify-center gap-1">
+                  {streak}<span className="text-xl md:text-2xl">×</span>
+                  {streak === 0 && <span className="text-xs md:text-sm text-pink-500/50 font-mono font-bold uppercase tracking-widest">none</span>}
                 </div>
+             </div>
+             <div className="bg-black/50 p-6 border-l-4 border-yellow-500 cyber-clip">
+                <div className="text-[10px] md:text-xs font-bold tracking-[0.2em] uppercase text-yellow-400/70 mb-2">Time Elapsed</div>
+                <div className="text-3xl md:text-4xl font-mono font-black text-yellow-400">{formatElapsedTime(elapsedTime)}</div>
              </div>
            </div>
 

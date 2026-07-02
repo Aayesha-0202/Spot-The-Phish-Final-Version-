@@ -37,9 +37,10 @@ export const attemptSchema = z.object({
 export const progressSchema = z.object({
   totalScore: z.number().min(0).optional(),
   completedLevels: z.number().int().min(0).max(5).optional(),
-  livesRemaining: z.number().int().min(0).max(3).optional(),
+  livesRemaining: z.number().int().min(0).optional(),
   streakAchieved: z.number().int().min(0).optional(),
   stimuliAttempted: z.number().int().min(0).optional(),
+  completionTimeMs: z.number().int().min(0).optional(),
 });
 
 export const finishSessionSchema = progressSchema.extend({
@@ -47,8 +48,9 @@ export const finishSessionSchema = progressSchema.extend({
   designation: z.string().optional(),
   readinessLevel: readinessEnum.optional(),
   completedLevels: z.number().int().min(0).max(5),
-  livesRemaining: z.number().int().min(0).max(3),
+  livesRemaining: z.number().int().min(0).optional(),
   streakAchieved: z.number().int().min(0),
+  completionTimeMs: z.number().int().min(0).optional(),
   reportSummary: z.string().optional(),
 });
 

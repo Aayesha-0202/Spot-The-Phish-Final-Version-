@@ -17,8 +17,9 @@ const sessionSchema = new Schema<ISession>(
     designation: { type: String },
     readinessLevel: { type: String, enum: ['LOW', 'MODERATE', 'HIGH', 'ELITE'] },
     completedLevels: { type: Number, default: 0 },
-    livesRemaining: { type: Number, default: 3 },
+    livesRemaining: { type: Number }, // kept for backward compat — no longer set by game
     streakAchieved: { type: Number, default: 0 },
+    completionTimeMs: { type: Number }, // total game duration in ms
     stimuliAttempted: { type: Number, default: 0 },
     reportSummary: { type: String },
     rounds: [{ type: Schema.Types.ObjectId, ref: 'Round' }],

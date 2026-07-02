@@ -1,73 +1,71 @@
 import { Stimulus, ElementId, InvestigationData, GameHistoryEntry, ElementData } from '../types';
 
 /**
- * Scoring model — transparent and exact.
+ * Proportional Scoring Model
  *
- *   - Each correctly classified stimulus awards EXACTLY +10 points (base).
- *   - An incorrect classification awards 0 points.
- *   - The running score is a simple tally of those awards (no normalization,
- *     no hidden offset, no multiplier on the score). The displayed score always
- *     equals the implemented logic.
- *   - "Streak" is tracked separately as a combo counter for UI flair (see the
- *     streak notification + inter-level screen) but does NOT inflate the score.
+ * THREAT images (at least one suspicious element):
+ *   - Score = round(10 × correctlySuspicious / totalSuspiciousElements)
+ *   - Each wrong accusation on a clean element subtracts proportionally
+ *   - Formula: score = clamp(round(10 × (caught - wrongAccusations) / totalSuspicious), 0, 10)
+ *   - isCorrect: score >= 8 (≥80%)
  *
- * Max possible score = 25 stimuli × 10 = 250.
+ * SAFE images (ALL elements legitimate):
+ *   - Full 10 pts if no element is flagged SUSPICIOUS
+ *   - 0 pts if any clean element is wrongly flagged SUSPICIOUS
+ *   - Player does NOT need to tag every element as Clean — ignoring them is fine
+ *   - isCorrect: no false accusations
+ *
+ * Max possible score = 15 stimuli × 10 = 150 pts
  */
 
-export const CORRECT_STIMULUS_POINTS = 10; // exact award per correctly classified stimulus
-export const MAX_SCORE = 250; // 25 stimuli × 10 points — denominator for the score bar
+export const CORRECT_STIMULUS_POINTS = 10;
+export const MAX_SCORE = 150; // 15 stimuli × 10 points
 
 const ELEMENT_IDS: ElementId[] = ['sender', 'content', 'actionUrl', 'actionText', 'amount'];
 
 export interface StimulusScoreResult {
-  rawScore: number; // base score for this stimulus (10 if correct, else 0)
-  isCorrect: boolean; // every threat flagged SUSPICIOUS AND no safe element falsely flagged
-  healthChange: number;
+  rawScore: number;   // 0-10 per stimulus
+  isCorrect: boolean; // true if score >= 8 (80%+)
 }
 
 /**
- * Evaluate a single stimulus. Scoring is per-stimulus, not per-element:
- * a fully-correct classification awards exactly CORRECT_STIMULUS_POINTS (+10);
- * anything less awards 0. Health still reflects element-level mistakes
- * (missed threats / false accusations) so lives remain meaningful.
+ * Evaluate a single stimulus using the proportional scoring model.
  */
 export function evaluateStimulus(
   stimulus: Stimulus,
   investigations: Partial<Record<ElementId, InvestigationData>>
 ): StimulusScoreResult {
-  let healthChange = 0;
-  let caughtAllThreats = true;
-  let noFalseAccusations = true;
+  const elements = ELEMENT_IDS.map((id) => {
+    const el = (stimulus as unknown as Record<string, ElementData | undefined>)[id];
+    if (!el) return null;
+    return { id, isSuspicious: el.isSuspicious, status: investigations[id]?.status };
+  }).filter(Boolean) as { id: ElementId; isSuspicious: boolean; status: string | undefined }[];
 
-  for (const id of ELEMENT_IDS) {
-    const el = (stimulus as unknown) as Record<string, ElementData | undefined>;
-    const trueElement = el[id];
-    if (!trueElement) continue;
+  const suspiciousElements = elements.filter((e) => e.isSuspicious);
+  const cleanElements = elements.filter((e) => !e.isSuspicious);
+  const isSafeImage = suspiciousElements.length === 0;
 
-    const status = investigations[id]?.status;
-
-    if (trueElement.isSuspicious) {
-      if (status === 'SUSPICIOUS') {
-        // threat caught
-      } else {
-        // missed, or only flagged "not sure" → not a clean classification
-        caughtAllThreats = false;
-        if (status !== 'NOT_SURE') healthChange -= 8; // ignored a real threat
-      }
-    } else {
-      if (status === 'SUSPICIOUS') {
-        healthChange -= 12; // false accusation
-        noFalseAccusations = false;
-      }
-    }
+  if (isSafeImage) {
+    // Safe image: penalise any false accusation on a clean element
+    const wrongAccusations = cleanElements.filter((e) => e.status === 'SUSPICIOUS').length;
+    const rawScore = wrongAccusations === 0 ? CORRECT_STIMULUS_POINTS : 0;
+    return { rawScore, isCorrect: wrongAccusations === 0 };
   }
 
-  const isCorrect = caughtAllThreats && noFalseAccusations;
-  const rawScore = isCorrect ? CORRECT_STIMULUS_POINTS : 0;
-  return { rawScore, isCorrect, healthChange };
+  // Threat image: proportional score
+  const caught = suspiciousElements.filter((e) => e.status === 'SUSPICIOUS').length;
+  const wrongAccusations = cleanElements.filter((e) => e.status === 'SUSPICIOUS').length;
+  const total = suspiciousElements.length;
+
+  // Net score with wrong-accusation penalty
+  const netCaught = Math.max(0, caught - wrongAccusations);
+  const rawScore = Math.min(CORRECT_STIMULUS_POINTS, Math.round((netCaught / total) * CORRECT_STIMULUS_POINTS));
+  const isCorrect = rawScore >= 8; // ≥80%
+
+  return { rawScore, isCorrect };
 }
 
-/** Live/final score = Σ of per-stimulus awards. Pure, no transforms. */
+/** Live/final score = Σ of per-stimulus awards. */
 export function computeTotalScore(history: GameHistoryEntry[]): number {
   return history.reduce((sum, h) => sum + h.scoreChange, 0);
 }

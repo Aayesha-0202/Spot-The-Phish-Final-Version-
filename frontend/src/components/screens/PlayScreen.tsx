@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { ElementId, ClassificationStatus, ClassificationReason } from '../../types';
 import { MAX_SCORE } from '../../data/scoring';
-import { CheckCircle, AlertTriangle, HelpCircle, X, ArrowRight, Zap, Crosshair, Heart, Flame } from 'lucide-react';
+import { CheckCircle, AlertTriangle, HelpCircle, X, ArrowRight, Zap, Crosshair, Clock, Flame } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { StimulusCardRenderer } from '../game/StimulusCardRenderer';
 
@@ -22,8 +22,6 @@ export const PlayScreen = () => {
     currentStimulusIndex,
     currentRound,
     phase,
-    health,
-    lives,
     score,
     streak,
     history,
@@ -31,8 +29,37 @@ export const PlayScreen = () => {
     submitInvestigation,
     proceedToNextCard,
     currentInvestigations,
-    startGame
+    startGame,
+    gameStartTime
   } = useGameStore();
+
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  useEffect(() => {
+    if (!gameStartTime) {
+      setElapsedTime(0);
+      return;
+    }
+    
+    setElapsedTime(Date.now() - gameStartTime);
+
+    const interval = setInterval(() => {
+      setElapsedTime(Date.now() - gameStartTime);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [gameStartTime]);
+
+  const formatElapsedTime = (ms: number) => {
+    const totalSec = Math.floor(ms / 1000);
+    const hrs = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+    if (hrs > 0) {
+      return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const isTutorial = phase === 'TUTORIAL' || (phase === 'INVESTIGATION_REVIEW' && currentRound === 0);
   const queue = isTutorial ? tutorialQueue : currentStimuliQueue;
@@ -101,15 +128,14 @@ export const PlayScreen = () => {
       {/* Top HUD Bar */}
       <div className="w-full flex justify-between items-start px-4 md:px-8 pt-4 z-40 pointer-events-none">
 
-        {/* Health Bar / Lives */}
+        {/* Elapsed Timer */}
         <div className="flex items-center gap-3">
            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#1a0f2e] border-2 border-pink-500 rounded-full flex items-center justify-center cyber-glow-pink">
-             <Heart className="w-5 h-5 md:w-6 md:h-6 text-pink-500 fill-pink-500" />
+             <Clock className="w-5 h-5 md:w-6 md:h-6 text-pink-500" />
            </div>
-           <div className="hidden md:flex gap-1">
-             {[1, 2, 3].map(i => (
-               <Heart key={i} className={`w-8 h-8 transition-all duration-300 ${i <= lives ? 'text-pink-500 fill-pink-500' : 'text-slate-800 fill-transparent'}`} />
-             ))}
+           <div className="flex flex-col">
+             <span className="text-[9px] uppercase tracking-[0.2em] font-mono text-pink-400 font-bold leading-none mb-1">Time Elapsed</span>
+             <span className="text-white font-mono font-black text-lg md:text-xl leading-none">{formatElapsedTime(elapsedTime)}</span>
            </div>
         </div>
 
@@ -203,51 +229,51 @@ export const PlayScreen = () => {
         <div className="w-full lg:w-1/2 max-w-[400px] flex flex-col justify-start pointer-events-auto">
 
           {phase === 'INVESTIGATION_REVIEW' ? (
-             <div className="cyber-clip-lg bg-[#100727] border-2 border-cyan-500/50 p-6 cyber-glow relative">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-400 to-transparent" />
-                <h3 className="font-display font-black text-2xl text-cyan-400 mb-2 uppercase tracking-widest">{isTutorial ? 'Practice Complete' : 'Case Closed'}</h3>
-                {isTutorial ? (
-                  <p className="text-pink-300/80 text-[11px] mb-3 font-mono uppercase tracking-widest border border-pink-500/30 bg-pink-500/5 px-3 py-1.5">
-                    ✓ That's the workflow — the real investigation begins next.
-                  </p>
-                ) : (
-                  <span className={`mb-3 inline-block text-xs font-black uppercase tracking-widest px-3 py-1 cyber-clip border ${lastScore > 0 ? 'text-green-400 border-green-500/40 bg-green-500/10' : 'text-slate-400 border-slate-600 bg-slate-700/20'}`}>
-                    {lastScore > 0 ? `+${lastScore} PTS · CORRECT READ` : `+0 PTS · MISSED CUES`}
-                  </span>
-                )}
-                <p className="text-cyan-100 text-sm mb-6 leading-relaxed bg-cyan-950/50 p-4 border-l-4 border-cyan-400 font-mono shadow-inner shadow-cyan-900/50">
-                  {currentStimulus.explanation}
-                </p>
-
-                <h4 className="font-bold text-pink-400 uppercase tracking-[0.2em] text-[10px] mb-4">Indicator Breakdown</h4>
-                <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
-                  {(['sender', 'content', 'actionUrl', 'actionText', 'amount'] as ElementId[]).map(id => {
-                     const trueEl = (currentStimulus as any)[id];
-                     if (!trueEl) return null;
-                     const inv = currentInvestigations[id];
-
-                     return (
-                       <div key={id} className="bg-black/40 p-3 border border-slate-800">
-                          <div className="flex items-start justify-between mb-1 gap-2">
-                            <span className="font-mono text-xs text-slate-400 shrink-0 uppercase">{id}</span>
-                            {trueEl.isSuspicious ? (
-                              <span className="text-red-400 text-[10px] font-bold px-1.5 py-0.5 bg-red-400/10 border border-red-500/30 uppercase">Threat</span>
-                            ) : (
-                              <span className="text-green-400 text-[10px] font-bold px-1.5 py-0.5 bg-green-400/10 border border-green-500/30 uppercase">Clean</span>
-                            )}
-                          </div>
-                          <p className="text-slate-300 text-xs mb-2">"{trueEl.text}"</p>
-                          <div className="mt-2 pt-2 border-t border-slate-800 flex items-center justify-between">
-                            <span className="text-[10px] uppercase text-slate-500 font-mono">User Log:</span>
-                            <span className={`text-[10px] font-black uppercase ${!inv ? 'text-slate-600' : inv.status === 'SUSPICIOUS' ? 'text-red-400' : inv.status === 'SAFE' ? 'text-green-400' : 'text-yellow-400'}`}>
-                              {inv ? inv.status : 'IGNORED'}
-                            </span>
-                          </div>
-                       </div>
-                     );
-                  })}
-                </div>
-             </div>
+              <div className="cyber-clip-lg bg-[#100727] border-2 border-cyan-500/50 p-8 cyber-glow relative space-y-4">
+                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-400 to-transparent" />
+                 <h3 className="font-display font-black text-3xl md:text-4xl text-cyan-400 uppercase tracking-widest">{isTutorial ? 'Practice Complete' : 'Case Closed'}</h3>
+                 {isTutorial ? (
+                   <p className="text-pink-300/80 text-xs font-mono uppercase tracking-widest border border-pink-500/30 bg-pink-500/5 px-3 py-1.5">
+                     ✓ That's the workflow — the real investigation begins next.
+                   </p>
+                 ) : (
+                   <span className={`inline-block text-sm font-black uppercase tracking-widest px-4 py-1.5 cyber-clip border ${lastScore > 0 ? 'text-green-400 border-green-500/40 bg-green-500/10' : 'text-slate-400 border-slate-600 bg-slate-700/20'}`}>
+                     {lastScore > 0 ? `+${lastScore} PTS · CORRECT READ` : `+0 PTS · MISSED CUES`}
+                   </span>
+                 )}
+                 <p className="text-cyan-100 text-base leading-relaxed bg-cyan-950/50 p-5 border-l-4 border-cyan-400 font-mono shadow-inner shadow-cyan-900/50">
+                   {currentStimulus.explanation}
+                 </p>
+ 
+                 <h4 className="font-bold text-pink-400 uppercase tracking-[0.2em] text-xs">Indicator Breakdown</h4>
+                 <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+                   {(['sender', 'content', 'actionUrl', 'actionText', 'amount'] as ElementId[]).map(id => {
+                      const trueEl = (currentStimulus as any)[id];
+                      if (!trueEl) return null;
+                      const inv = currentInvestigations[id];
+ 
+                      return (
+                        <div key={id} className="bg-black/40 p-4 border border-slate-800 space-y-2">
+                           <div className="flex items-start justify-between gap-2">
+                             <span className="font-mono text-xs md:text-sm font-bold text-slate-400 shrink-0 uppercase">{id}</span>
+                             {trueEl.isSuspicious ? (
+                               <span className="text-red-400 text-xs font-black px-2 py-0.5 bg-red-400/10 border border-red-500/30 uppercase">Threat</span>
+                             ) : (
+                               <span className="text-green-400 text-xs font-black px-2 py-0.5 bg-green-400/10 border border-green-500/30 uppercase">Clean</span>
+                             )}
+                           </div>
+                           <p className="text-slate-200 text-sm md:text-base font-medium">"{trueEl.text}"</p>
+                           <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between">
+                             <span className="text-xs uppercase text-slate-500 font-mono">User Log:</span>
+                             <span className={`text-xs font-black uppercase ${!inv ? 'text-slate-600' : inv.status === 'SUSPICIOUS' ? 'text-red-400' : inv.status === 'SAFE' ? 'text-green-400' : 'text-yellow-400'}`}>
+                               {inv ? inv.status : 'IGNORED'}
+                             </span>
+                           </div>
+                        </div>
+                      );
+                   })}
+                 </div>
+              </div>
           ) : selectedElement ? (
             <div className="cyber-clip-lg bg-[#180a0a] border-2 border-yellow-400 p-6 cyber-glow-yellow relative">
                {/* Warning Header */}

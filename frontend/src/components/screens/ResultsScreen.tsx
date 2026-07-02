@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../../store/gameStore';
+import { useAuthStore } from '../../store/authStore';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
-import { Download, Linkedin, MessageCircle, Crosshair, Award, CheckCircle, AlertTriangle, Lightbulb, ShieldCheck, TrendingUp, Mail, Loader2, Trophy } from 'lucide-react';
+import { Download, Linkedin, MessageCircle, Crosshair, Award, CheckCircle, AlertTriangle, Lightbulb, ShieldCheck, TrendingUp, Mail, Loader2, Trophy, Clock } from 'lucide-react';
 import { analyzePerformance, PerformanceAnalysis } from '../../data/performance';
 
 const READINESS_COLOR: Record<PerformanceAnalysis['readinessLevel'], string> = {
@@ -179,12 +180,12 @@ function drawBullets(ctx: CanvasRenderingContext2D, items: string[], x: number, 
 }
 
 export const ResultsScreen = () => {
-  const { health, lives, history, playerName, resetGame, playerEmail, reportEmailStatus, reportEmailMessage, sendReportEmail, lastFullyCompleted, rankedSessionId } = useGameStore();
+  const { completionTimeMs, history, playerName, resetGame, playerEmail, reportEmailStatus, reportEmailMessage, sendReportEmail, lastFullyCompleted, rankedSessionId } = useGameStore();
   const [isExporting, setIsExporting] = useState(false);
   const sentRef = useRef(false);
   const [cardDataUrl, setCardDataUrl] = useState<string | null>(null);
 
-  const analysis = useMemo<PerformanceAnalysis>(() => analyzePerformance(history, health), [history, health]);
+  const analysis = useMemo<PerformanceAnalysis>(() => analyzePerformance(history, completionTimeMs || 0), [history, completionTimeMs]);
 
   // Render the share card once and auto-email it (no extra button click) if the
   // player gave an email. Guarded against React StrictMode double-invoke.
@@ -265,7 +266,7 @@ export const ResultsScreen = () => {
             });
           } catch { /* user cancelled */ }
         } else {
-          triggerDownload(canvas);
+          triggerDownload(canvas.toDataURL('image/png'));
           alert('Saved the image — attach it to your post to share.');
         }
         setIsExporting(false);
@@ -317,7 +318,7 @@ export const ResultsScreen = () => {
                    { k: 'Stimuli Correct', v: `${analysis.stimuliCorrect}/${analysis.stimuliTotal}` },
                    { k: 'Threats Caught', v: `${analysis.threatsCaughtPct}%` },
                    { k: 'False Alarms', v: `${analysis.falseAccusationRate}%` },
-                   { k: 'Lives Left', v: `${lives}/3` },
+                   { k: 'Time Taken', v: analysis.completionTimeFormatted },
                  ].map(s => (
                    <div key={s.k} className="bg-black/40 p-3 border border-slate-800 cyber-clip text-center">
                      <div className="text-slate-500 text-[9px] font-bold uppercase tracking-widest">{s.k}</div>
@@ -368,6 +369,16 @@ export const ResultsScreen = () => {
                 <Trophy /> Your score has been submitted to the global leaderboard.
               </div>
             )}
+            {!lastFullyCompleted && !rankedSessionId && useAuthStore.getState().isAuthenticated && (
+              <div className="mb-4 p-3 border border-yellow-500/40 bg-yellow-500/5 text-yellow-200/80 text-xs font-mono flex items-center gap-2 cyber-clip">
+                <AlertTriangle /> Leaderboard submission requires completing all 5 levels.
+              </div>
+            )}
+            {!useAuthStore.getState().isAuthenticated && !useAuthStore.getState().isGuest && (
+              <div className="mb-4 p-3 border border-yellow-500/40 bg-yellow-500/5 text-yellow-200/80 text-xs font-mono flex items-center gap-2 cyber-clip">
+                <AlertTriangle /> Sign in to submit your score to the global leaderboard.
+              </div>
+            )}
 
             <div className="flex flex-col gap-4 mt-auto">
               <button onClick={handleDownload} disabled={isExporting} className="w-full cyber-clip gap-2 py-4 bg-yellow-400/10 border-2 border-yellow-400 text-yellow-400 hover:bg-yellow-400 hover:text-black font-bold uppercase tracking-widest transition-all flex justify-center items-center disabled:opacity-60">
@@ -399,7 +410,108 @@ export const ResultsScreen = () => {
             </div>
           </div>
 
-          {/* Personalized Performance Report */}
+          {/* Cognitive Threat Diagnostics Panel — MOVED ABOVE Performance Report */}
+          <div className="cyber-clip-lg p-8 lg:col-span-3 bg-[#0a0515] border-2 border-cyan-500/60 space-y-8">
+            <div className="flex items-center gap-3">
+              <Crosshair className="w-7 h-7 text-cyan-400" />
+              <h3 className="text-2xl md:text-3xl font-display font-black text-cyan-300 uppercase tracking-widest">Cognitive Diagnostics</h3>
+            </div>
+
+            {/* 1. Key Metrics Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              {[
+                { label: 'Attention to Detail', val: `${analysis.attentionToDetail}%`, desc: 'Cues successfully identified', color: 'text-pink-400' },
+                { label: 'Classification Accuracy', val: `${analysis.accuracy}%`, desc: 'Element-level classification accuracy', color: 'text-cyan-400' },
+                { label: 'Investigation Efficiency', val: `${analysis.efficiency}%`, desc: 'Weighted speed + accuracy index', color: 'text-yellow-400' },
+                { label: 'Total Duration', val: analysis.completionTimeFormatted, desc: 'Continuous elapsed time', color: 'text-green-400' }
+              ].map((m) => (
+                <div key={m.label} className="bg-black/50 p-8 border-t-2 border-slate-700/60 rounded-lg text-center space-y-3 hover:border-cyan-500/40 transition-colors">
+                  <div className="text-slate-400 text-sm font-bold uppercase tracking-wider">{m.label}</div>
+                  <div className={`text-4xl md:text-5xl font-black font-mono ${m.color}`}>{m.val}</div>
+                  <div className="text-slate-500 text-xs uppercase font-mono tracking-widest">{m.desc}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* 2. Visual Rates & Breakdown */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-black/40 p-6 border border-slate-800 rounded-lg flex flex-col justify-between space-y-4">
+                <h4 className="text-pink-400 font-bold uppercase tracking-wider text-sm">Threat Detection Rate</h4>
+                <div className="flex items-center gap-4">
+                  <div className="relative w-24 h-24 shrink-0">
+                    <svg className="w-full h-full transform -rotate-90">
+                      <circle cx="48" cy="48" r="40" className="stroke-slate-800" strokeWidth="6" fill="transparent" />
+                      <circle cx="48" cy="48" r="40" className="stroke-pink-500" strokeWidth="6" fill="transparent" strokeDasharray={251.3} strokeDashoffset={251.3 - (251.3 * analysis.threatDetectionRate) / 100} />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center font-mono font-bold text-white text-lg">
+                      {analysis.threatDetectionRate}%
+                    </div>
+                  </div>
+                  <p className="text-slate-400 text-sm font-mono leading-relaxed">
+                    Percentage of phishing emails/messages correctly flagged as threats.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-black/40 p-6 border border-slate-800 rounded-lg flex flex-col justify-between space-y-4">
+                <h4 className="text-green-400 font-bold uppercase tracking-wider text-sm">Safe Verification Rate</h4>
+                <div className="flex items-center gap-4">
+                  <div className="relative w-24 h-24 shrink-0">
+                    <svg className="w-full h-full transform -rotate-90">
+                      <circle cx="48" cy="48" r="40" className="stroke-slate-800" strokeWidth="6" fill="transparent" />
+                      <circle cx="48" cy="48" r="40" className="stroke-green-500" strokeWidth="6" fill="transparent" strokeDasharray={251.3} strokeDashoffset={251.3 - (251.3 * analysis.safeDetectionRate) / 100} />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center font-mono font-bold text-white text-lg">
+                      {analysis.safeDetectionRate}%
+                    </div>
+                  </div>
+                  <p className="text-slate-400 text-sm font-mono leading-relaxed">
+                    Percentage of legitimate messages correctly cleared as safe.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-black/40 p-6 border border-slate-800 rounded-lg flex flex-col justify-between space-y-4">
+                <h4 className="text-cyan-400 font-bold uppercase tracking-wider text-sm">Classification Breakdown</h4>
+                <div className="space-y-3">
+                  <div className="flex justify-between font-mono text-sm">
+                    <span className="text-slate-400">CORRECT ELEMENTS:</span>
+                    <span className="text-green-400 font-bold">{analysis.correctClassifications}</span>
+                  </div>
+                  <div className="flex justify-between font-mono text-sm">
+                    <span className="text-slate-400">INCORRECT ELEMENTS:</span>
+                    <span className="text-red-400 font-bold">{analysis.incorrectClassifications}</span>
+                  </div>
+                  <div className="w-full h-3 bg-slate-900 rounded-full overflow-hidden flex">
+                    <div className="h-full bg-green-500" style={{ width: `${(analysis.correctClassifications / Math.max(1, analysis.correctClassifications + analysis.incorrectClassifications)) * 100}%` }} />
+                    <div className="h-full bg-red-500" style={{ width: `${(analysis.incorrectClassifications / Math.max(1, analysis.correctClassifications + analysis.incorrectClassifications)) * 100}%` }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Inferred Soft Skills */}
+            <div className="bg-black/30 p-6 border border-cyan-500/20 rounded-lg space-y-3">
+              <h4 className="text-cyan-300 font-bold uppercase tracking-wider text-sm font-display">Inferred Cognitive Profile</h4>
+              <div className="flex flex-wrap gap-2">
+                {analysis.softSkills.map((skill) => (
+                  <span key={skill} className="px-3 py-1.5 rounded-full text-sm font-mono font-bold uppercase bg-cyan-950/60 text-cyan-300 border border-cyan-500/30">
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* 4. Pressure Analysis — IMPROVED UI */}
+            <div className="bg-gradient-to-r from-[#180a20] to-[#0d0722] p-8 border-l-4 border-pink-500 rounded-r-lg space-y-3">
+              <h4 className="text-pink-400 font-bold uppercase tracking-wider text-lg font-display">Stress Tolerance & Stamina Analysis</h4>
+              <p className="text-slate-200 text-base md:text-lg leading-loose font-mono">
+                {analysis.pressureAnalysis}
+              </p>
+            </div>
+          </div>
+
+          {/* Personalized Performance Report — NOW BELOW Cognitive Diagnostics */}
           <div className="cyber-clip-lg p-8 lg:col-span-3 bg-[#0a0515] border-2 border-cyan-500/60">
             <div className="flex items-center gap-3 mb-6">
               <Award className="w-7 h-7 text-cyan-400" />
@@ -408,7 +520,7 @@ export const ResultsScreen = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-black/40 p-5 border-l-4 border-pink-500">
-                <div className="text-pink-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-2">Why you earned “{analysis.designation.label}”</div>
+                <div className="text-pink-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-2">Why you earned "{analysis.designation.label}"</div>
                 <p className="text-slate-200 text-sm leading-relaxed font-mono">{analysis.designationWhy}</p>
               </div>
               <div className="bg-black/40 p-5 border-l-4 border-cyan-400">

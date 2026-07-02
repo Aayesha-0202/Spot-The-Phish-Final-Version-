@@ -36,7 +36,7 @@ interface GameStore extends GameState {
   startTutorial: () => void;
   startNextRound: () => void;
   investigateElement: (elementId: ElementId, data: InvestigationData) => void;
-  submitInvestigation: () => { scoreChange: number, healthChange: number };
+  submitInvestigation: () => { scoreChange: number };
   proceedToNextCard: () => void;
   sendReportEmail: (pngBase64: string) => Promise<void>;
   resetGame: () => void;
@@ -51,14 +51,14 @@ const INITIAL_STATE = {
   lastFullyCompleted: false,
   rankedSessionId: null as string | null,
   score: 0,
-  health: 100, // 0 to 100
-  lives: 3,
   streak: 0,
   currentRound: 0,
   currentStimulusIndex: 0,
   usedStimuliIds: [] as string[],
-  history: [],
-  currentStimuliQueue: [],
+  history: [] as GameHistoryEntry[],
+  gameStartTime: null as number | null,
+  completionTimeMs: null as number | null,
+  currentStimuliQueue: [] as Stimulus[],
   tutorialQueue: TUTORIAL_STIMULI.slice(0, 1),
   currentInvestigations: {} as Partial<Record<ElementId, InvestigationData>>,
   playerId: null as string | null,
@@ -68,7 +68,7 @@ const INITIAL_STATE = {
 
 /** Fire-and-forget: log backend errors without ever breaking the UI. */
 function fire(p: Promise<unknown>) {
-  p.catch((e: Error) => console.warn('[gameApi]', e.message));
+  p.catch((e: Error) => console.warn('[gameApi] fire-and-forget error:', e.message));
 }
 
 /** Persist a single stimulus attempt to the backend. */
@@ -103,7 +103,6 @@ function persistProgress(state: GameStore) {
     gameApi.saveProgress(state.sessionId, {
       totalScore: state.score,
       completedLevels: Math.max(0, state.currentRound - 1),
-      livesRemaining: state.lives,
       streakAchieved: state.streak,
       stimuliAttempted: state.history.length,
     })
@@ -112,25 +111,48 @@ function persistProgress(state: GameStore) {
 
 /**
  * On game end: finish the session + store the report, then (if authenticated and
- * the run was fully completed) submit to the leaderboard. Each step is awaited
- * internally but the whole thing is fire-and-forget at the call site so it never
- * blocks the results screen.
+ * the run was fully completed) submit to the leaderboard.
+ * Each step is independent — one failure won't block the others.
  */
 async function finalize(state: GameStore) {
   if (!state.sessionId) return;
-  const a = analyzePerformance(state.history, state.health);
-  const fullyCompleted = state.currentRound >= 5 && state.lives > 0;
+  const completionTimeMs = state.gameStartTime ? Date.now() - state.gameStartTime : undefined;
+  const a = analyzePerformance(state.history, completionTimeMs ?? 0);
+  const fullyCompleted = state.currentRound >= 5;
 
+  // Update store with completion time
+  useGameStore.setState({ completionTimeMs: completionTimeMs ?? null });
+
+  // Ensure the session exists in the backend (retry upsertPlayer + startSession if needed)
+  try {
+    const auth = useAuthStore.getState();
+    const userId = auth.user?._id;
+    await gameApi.upsertPlayer(state.playerId || '', state.playerName || 'ANONYMOUS', state.playerEmail || undefined, userId);
+    await gameApi.startSession(state.sessionId, state.playerId || '');
+  } catch (e) {
+    console.warn('[finalize] ensureSession failed:', (e as Error).message);
+  }
+
+  // Step 1: Finish the session (mark completed with final totals)
+  let sessionFinished = false;
   try {
     await gameApi.finishSession(state.sessionId, {
       totalScore: state.score,
       designation: a.designation.label,
       readinessLevel: a.readinessLevel,
       completedLevels: Math.min(5, state.currentRound),
-      livesRemaining: state.lives,
       streakAchieved: state.streak,
+      completionTimeMs,
       reportSummary: a.summary,
     });
+    sessionFinished = true;
+    console.log('[finalize] finishSession SUCCESS');
+  } catch (e) {
+    console.warn('[finalize] finishSession failed:', (e as Error).message);
+  }
+
+  // Step 2: Save the report analytics (independent of step 1)
+  try {
     await gameApi.saveReport(state.sessionId, {
       compositeScore: a.compositeScore,
       designation: a.designation.label,
@@ -150,18 +172,41 @@ async function finalize(state: GameStore) {
       stimuliCorrect: a.stimuliCorrect,
       stimuliTotal: a.stimuliTotal,
     });
-
-    // Anti-cheat leaderboard submit — only authed, fully-completed runs.
-    const auth = useAuthStore.getState();
-    if (auth.isAuthenticated && fullyCompleted) {
-      await gameApi.submitLeaderboard(state.sessionId, a.compositeScore);
-    }
   } catch (e) {
-    console.warn('[finalize]', (e as Error).message);
+    console.warn('[finalize] saveReport failed:', (e as Error).message);
   }
 
-  // Reflect ranking eligibility for the UI (best-effort).
-  useGameStore.setState({ lastFullyCompleted: fullyCompleted, rankedSessionId: fullyCompleted ? state.sessionId : null });
+  // Step 3: Submit to leaderboard (independent of steps 1 & 2)
+  const auth = useAuthStore.getState();
+  console.log('[finalize] auth state:', { isAuthenticated: auth.isAuthenticated, isGuest: auth.isGuest, fullyCompleted, sessionFinished, sessionId: state.sessionId });
+  let leaderboardSubmitted = false;
+  if (auth.isAuthenticated && fullyCompleted) {
+    // Retry up to 2 times with delay in case session creation was slow
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const result = await gameApi.submitLeaderboard(state.sessionId, a.compositeScore);
+        console.log('[finalize] leaderboard submit SUCCESS:', result);
+        leaderboardSubmitted = true;
+        break;
+      } catch (e) {
+        const msg = (e as Error).message;
+        console.warn(`[finalize] leaderboard submit attempt ${attempt + 1} FAILED:`, msg);
+        // If session not found, wait and retry (session might still be being created)
+        if (msg.includes('Session not found') && attempt === 0) {
+          await new Promise(r => setTimeout(r, 1500));
+          // Re-ensure session exists before retry
+          try {
+            await gameApi.startSession(state.sessionId, state.playerId || '');
+          } catch { /* ignore */ }
+        }
+      }
+    }
+  } else {
+    console.log('[finalize] leaderboard submit SKIPPED:', { isAuthenticated: auth.isAuthenticated, isGuest: auth.isGuest, fullyCompleted });
+  }
+
+  // Reflect ranking eligibility for the UI — only if submit actually succeeded.
+  useGameStore.setState({ lastFullyCompleted: leaderboardSubmitted, rankedSessionId: leaderboardSubmitted ? state.sessionId : null });
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -184,12 +229,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   startGame: () => {
     // Fresh run: draw Level 1 and route through the initiation screen.
+    const { playerName } = get();
+    if (!playerName.trim()) return; // codename is mandatory
     const newQueue = getStimuliForTier(1, []);
     const playerId = get().playerId || getOrCreatePlayerId();
     const sessionId = newId('s');
-    const { playerName, playerEmail } = get();
+    const { playerEmail } = get();
     const auth = useAuthStore.getState();
     const userId = auth.user?._id;
+    const now = Date.now();
 
     set({
       ...INITIAL_STATE,
@@ -197,16 +245,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       playerEmail,
       playerId,
       sessionId,
-      caseStartTime: Date.now(),
+      caseStartTime: now,
+      gameStartTime: now, // Global timer starts here and never resets
+      completionTimeMs: null,
       phase: 'INTER_ROUND',
       currentRound: 1,
       currentStimuliQueue: newQueue,
       usedStimuliIds: newQueue.map((s) => s.id),
     });
 
-    // Persist player (with email + auth link) + start session (best-effort).
-    fire(gameApi.upsertPlayer(playerId, playerName || 'ANONYMOUS', playerEmail || undefined, userId));
-    fire(gameApi.startSession(sessionId, playerId));
+    // Persist player (with email + auth link) THEN start session (must be sequential).
+    fire(
+      gameApi.upsertPlayer(playerId, playerName || 'ANONYMOUS', playerEmail || undefined, userId)
+        .then(() => gameApi.startSession(sessionId, playerId))
+    );
   },
 
   startNextRound: () => {
@@ -222,6 +274,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const newQueue = getStimuliForTier(nextRound, usedStimuliIds);
 
     // Show the inter-level initiation screen before EVERY level (not just Level 1).
+    // gameStartTime is NOT reset — timer continues across rounds.
     set({
       phase: 'INTER_ROUND',
       currentRound: nextRound,
@@ -248,15 +301,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const queue = isTutorial ? state.tutorialQueue : state.currentStimuliQueue;
     const stimulus = queue[state.currentStimulusIndex];
 
-    // Practice rounds never affect score, streak, health or history.
+    // Practice rounds never affect score, streak, or history.
     if (isTutorial) {
       set({ phase: 'INVESTIGATION_REVIEW' });
-      return { scoreChange: 0, healthChange: 0 };
+      return { scoreChange: 0 };
     }
 
-    // Transparent scoring: +10 per correctly classified stimulus (no multipliers).
-    const { rawScore, isCorrect, healthChange } = evaluateStimulus(stimulus, state.currentInvestigations);
+    // Proportional scoring: 0-10 pts per stimulus.
+    const { rawScore, isCorrect } = evaluateStimulus(stimulus, state.currentInvestigations);
     const newStreak = isCorrect ? state.streak + 1 : 0;
+    const responseTimeMs = Date.now() - state.caseStartTime;
 
     const newHistoryEntry: GameHistoryEntry = {
       stimulusId: stimulus.id,
@@ -264,23 +318,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       scoreChange: rawScore,
       streakMultiplier: 1, // streak is display-only; it does not inflate the score
       isCorrect,
-      healthChange,
+      roundNumber: state.currentRound,
+      responseTimeMs,
     };
 
     const newHistory = [...state.history, newHistoryEntry];
-    const newScore = computeTotalScore(newHistory); // exact tally of +10 awards
-    const newHealth = Math.max(0, state.health + healthChange);
-    let newLives = state.lives;
-    if (healthChange < 0) {
-      newLives = Math.max(0, state.lives - 1);
-    }
-
-    const responseTimeMs = Date.now() - state.caseStartTime;
+    const newScore = computeTotalScore(newHistory);
 
     set({
       score: newScore,
-      health: newHealth,
-      lives: newLives,
       streak: newStreak,
       history: newHistory,
       phase: 'INVESTIGATION_REVIEW',
@@ -290,24 +336,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
     persistAttempt({ ...get(), currentInvestigations: state.currentInvestigations }, stimulus, isCorrect, rawScore, responseTimeMs);
     persistProgress(get());
 
-    return { scoreChange: rawScore, healthChange };
+    return { scoreChange: rawScore };
   },
 
   proceedToNextCard: () => {
     const state = get();
     const activeQueue = state.currentRound === 0 ? state.tutorialQueue : state.currentStimuliQueue;
 
-    if (state.lives <= 0 && state.currentRound > 0) {
-      set({ phase: 'RESULTS' });
-      void finalize(get());
-      return;
-    }
+    // No lives check — game always continues to the end
 
     if (state.currentStimulusIndex + 1 < activeQueue.length) {
       set({
         currentStimulusIndex: state.currentStimulusIndex + 1,
         currentInvestigations: {},
         phase: state.currentRound === 0 ? 'TUTORIAL' : 'PLAYING',
+        caseStartTime: Date.now(), // per-case timer for responseTime tracking
       });
     } else {
       if (state.currentRound === 0) {
@@ -322,13 +365,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   /** Auto-email the finished report. ResultsScreen triggers this after rendering the card. */
   sendReportEmail: async (pngBase64: string) => {
-    const { sessionId, playerEmail, reportEmailStatus, history, health } = get();
+    const { sessionId, playerEmail, reportEmailStatus, history, completionTimeMs } = get();
     if (!sessionId || reportEmailStatus !== 'idle') return;
     if (!playerEmail.trim()) {
       set({ reportEmailStatus: 'skipped', reportEmailMessage: 'No email provided — use Download instead.' });
       return;
     }
-    const a = analyzePerformance(history, health);
+    const a = analyzePerformance(history, completionTimeMs ?? 0);
     set({ reportEmailStatus: 'sending', reportEmailMessage: '' });
     try {
       await gameApi.emailReport(sessionId, {

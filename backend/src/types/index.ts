@@ -28,9 +28,10 @@ export interface ISession extends Document {
   designation?: string;
   readinessLevel?: ReadinessLevel;
   completedLevels: number;
-  livesRemaining: number;
+  livesRemaining?: number;  // kept for backward compat — no longer actively used
   streakAchieved: number;
   stimuliAttempted: number;
+  completionTimeMs?: number;  // total game duration in ms
   reportSummary?: string;
   rounds: Types.ObjectId[];
   createdAt: Date;
@@ -185,6 +186,7 @@ export interface ILeaderboardEntry extends Document {
   stimuliCorrect: number;
   stimuliIncorrect: number;
   avgResponseTimeMs?: number;
+  completionTimeMs?: number;  // total game duration in ms (used for leaderboard tiebreaking)
   completedAt: Date;
   createdAt: Date;
   updatedAt: Date;

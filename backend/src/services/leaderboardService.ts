@@ -20,6 +20,7 @@ export interface LeaderboardRow {
   stimuliCorrect: number;
   stimuliIncorrect: number;
   avgResponseTimeMs?: number;
+  completionTimeMs?: number;  // total game duration — used for tiebreaking
   completedAt: Date;
   isCurrentUser?: boolean;
 }
@@ -50,12 +51,14 @@ async function rankedBestPerUser(period?: LeaderboardPeriod): Promise<Leaderboar
 
   const rows = await LeaderboardEntry.aggregate<LeaderboardRow>([
     { $match: match },
-    // Best entry per user first.
-    { $sort: { compositeScore: -1, highestStreak: -1, completedAt: 1 } },
+    // Handle null completionTimeMs — treat as very high (worst) for sorting
+    { $addFields: { completionTimeMs: { $ifNull: ['$completionTimeMs', 999999999] } } },
+    // Best entry per user: highest score, then fastest time.
+    { $sort: { compositeScore: -1, completionTimeMs: 1, completedAt: 1 } },
     { $group: { _id: '$user', doc: { $first: '$$ROOT' } } },
     { $replaceRoot: { newRoot: '$doc' } },
     // Re-sort the deduped set.
-    { $sort: { compositeScore: -1, highestStreak: -1, completedAt: 1 } },
+    { $sort: { compositeScore: -1, completionTimeMs: 1, completedAt: 1 } },
   ]);
 
   return rows.map((row, i) => ({
@@ -70,6 +73,7 @@ export async function top(limit: number, period: LeaderboardPeriod = 'all', offs
   const ranked = await rankedBestPerUser(period);
   return ranked.slice(offset, offset + limit).map((row) => ({
     ...row,
+    completionTimeMs: row.completionTimeMs === 999999999 ? undefined : row.completionTimeMs,
     rank: row.rank, // already offset-correct (1-based global)
     isCurrentUser: currentUserId ? row.user === currentUserId : false,
   }));
@@ -93,6 +97,7 @@ export async function recent(limit = 10, currentUserId?: string): Promise<Leader
     stimuliCorrect: row.stimuliCorrect,
     stimuliIncorrect: row.stimuliIncorrect,
     avgResponseTimeMs: row.avgResponseTimeMs,
+    completionTimeMs: row.completionTimeMs,
     completedAt: row.completedAt,
     isCurrentUser: currentUserId ? String(row.user) === currentUserId : false,
   }));
@@ -122,6 +127,7 @@ export async function bestScoreOfUser(userId: string): Promise<LeaderboardRow | 
     stimuliCorrect: entry.stimuliCorrect,
     stimuliIncorrect: entry.stimuliIncorrect,
     avgResponseTimeMs: entry.avgResponseTimeMs,
+    completionTimeMs: entry.completionTimeMs,
     completedAt: entry.completedAt,
     rank: idx === -1 ? null : (idx + 1),
   } as LeaderboardRow;
@@ -143,7 +149,18 @@ export async function submit(sessionId: string, userId: string, clientScore?: nu
   if (!session) throw ApiError.notFound('Session not found');
 
   // Ownership: the game session must belong to the authenticated user.
-  if (!session.user || String(session.user) !== userId) {
+  // Also check via the Player's user link (session.user may be null if created before auth).
+  let ownsSession = session.user && String(session.user) === userId;
+  if (!ownsSession) {
+    const player = await Player.findOne({ playerId: session.playerId }).lean();
+    ownsSession = !!(player?.user && String(player.user) === userId);
+  }
+  // If the session lacks a user link but the player is linked to this user, fix it.
+  if (ownsSession && !session.user) {
+    session.user = userId as any;
+    await session.save();
+  }
+  if (!ownsSession) {
     throw ApiError.forbidden('This session does not belong to you');
   }
 
@@ -173,6 +190,7 @@ export async function submit(sessionId: string, userId: string, clientScore?: nu
         stimuliCorrect: recomputed.stimuliCorrect,
         stimuliIncorrect: recomputed.stimuliIncorrect,
         avgResponseTimeMs: recomputed.avgResponseTimeMs,
+        completionTimeMs: (session as any).completionTimeMs ?? undefined,
         completedAt: session.endTime || new Date(),
       },
     },

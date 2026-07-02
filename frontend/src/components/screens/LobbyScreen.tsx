@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { useAuthStore } from '../../store/authStore';
-import { ShieldCheck, Crosshair, Play, ArrowRight, Zap, AlertTriangle, Search, Info, X, Mail, User, HelpCircle, SkipForward } from 'lucide-react';
+import { Crosshair, Play, ArrowRight, Zap, AlertTriangle, Search, Info, X, Mail, User, HelpCircle, SkipForward } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import logoUrl from '../../assets/ZeTheta logo.jpg';
 
 const CONSENT_ITEMS = [
   { key: 'dpdp', label: 'Acknowledge DPDP Privacy Act' },
@@ -18,6 +19,7 @@ const CONSENT_DETAILS: Record<string, string> = {
 
 export const LobbyScreen = () => {
   const { startTutorial, startGame, playerName, setPlayerName, playerEmail, setPlayerEmail } = useGameStore();
+  const { isAuthenticated, isGuest, user } = useAuthStore();
   const [agreed, setAgreed] = useState({
     dpdp: false,
     record: false,
@@ -31,8 +33,9 @@ export const LobbyScreen = () => {
   const [linkEmail, setLinkEmail] = useState(false);
   const emailValid = !playerEmail || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(playerEmail);
 
-  const allAgreed = agreed.dpdp && agreed.record && agreed.academic;
-  const remainingCount = 3 - (Number(agreed.dpdp) + Number(agreed.record) + Number(agreed.academic));
+  const codenameValid = playerName.trim().length > 0;
+  const allAgreed = agreed.dpdp && agreed.record && agreed.academic && codenameValid;
+  const remainingCount = (agreed.dpdp ? 0 : 1) + (agreed.record ? 0 : 1) + (agreed.academic ? 0 : 1) + (codenameValid ? 0 : 1);
 
   const handlePlayClick = () => {
     setShowIntro(true);
@@ -43,12 +46,9 @@ export const LobbyScreen = () => {
 
       <div className="absolute top-0 w-full h-2 bg-gradient-to-r from-pink-500 via-cyan-400 to-yellow-400 opacity-80" />
 
-      {/* Brand logo — top-left corner of the landing screen (TODO: swap for official asset) */}
+      {/* Brand logo — top-left corner of the landing screen */}
       <div className="absolute top-5 left-5 md:top-8 md:left-10 z-20" aria-label="Spot the Phish logo">
-        <div className="relative w-12 h-12 md:w-14 md:h-14 cyber-clip bg-[#0d0d1a] border-2 border-cyan-400 cyber-glow flex items-center justify-center">
-          <ShieldCheck className="w-6 h-6 md:w-7 md:h-7 text-cyan-400" strokeWidth={2.5} />
-          <Crosshair className="w-3.5 h-3.5 md:w-4 md:h-4 text-pink-500 -ml-2 -mb-2.5" strokeWidth={2.5} />
-        </div>
+        <img src={logoUrl} alt="ZeTheta Logo" className="w-32 h-32 md:w-48 md:h-48 object-contain" />
       </div>
 
       <AnimatePresence mode="wait">
@@ -57,7 +57,7 @@ export const LobbyScreen = () => {
             <motion.div initial={{ opacity: 0, y: -30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="w-full max-w-4xl flex flex-col items-center text-center">
 
               <div className="flex items-center gap-2 opacity-90 mb-6 border-b-2 border-cyan-400 px-6 py-2 uppercase tracking-[0.3em] text-xs font-black text-cyan-300 font-display">
-                <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                <img src={logoUrl} alt="" className="w-6 h-6 object-contain" />
                 Neural Assessment Module
               </div>
 
@@ -88,9 +88,12 @@ export const LobbyScreen = () => {
                     <input
                       value={playerName}
                       onChange={e => setPlayerName(e.target.value)}
-                      placeholder="Codename (optional)"
+                      placeholder="Codename *"
                       className="w-full bg-black/50 border border-cyan-500/40 text-white placeholder-slate-500 p-3 text-sm font-mono focus:border-cyan-400 outline-none cyber-clip"
                     />
+                    {!codenameValid && (
+                      <p className="text-yellow-400 text-[10px] mt-1 font-mono">A codename is required to start the game.</p>
+                    )}
                     <button
                       type="button"
                       onClick={() => setLinkEmail(v => !v)}
@@ -128,9 +131,9 @@ export const LobbyScreen = () => {
                     </AnimatePresence>
                   </div>
                   <p className="mt-3 text-[10px] uppercase tracking-widest text-slate-500 font-mono">
-                    {useAuthStore.getState().isAuthenticated
-                      ? `Signed in as ${useAuthStore.getState().user?.email} — scores count on the leaderboard`
-                      : useAuthStore.getState().isGuest
+                    {isAuthenticated
+                      ? `Signed in as ${user?.email || user?.username || 'Unknown'} — scores count on the leaderboard`
+                      : isGuest
                         ? 'Playing as Guest — sign up to rank on the leaderboard'
                         : 'Playing as Guest — no password or account needed'}
                   </p>

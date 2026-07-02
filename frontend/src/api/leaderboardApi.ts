@@ -14,6 +14,7 @@ export interface LeaderboardRow {
   stimuliCorrect: number;
   stimuliIncorrect: number;
   avgResponseTimeMs?: number;
+  completionTimeMs?: number;
   completedAt: string;
   isCurrentUser?: boolean;
 }

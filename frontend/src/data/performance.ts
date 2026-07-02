@@ -19,11 +19,12 @@ export interface DesignationInfo {
   blurb: string;
 }
 
-export function getDesignation(compositeScore: number, health: number): DesignationInfo {
-  if (compositeScore > 210 && health >= 80) return { label: 'NETRUNNER SUPREME', tier: 1, blurb: 'Elite threat-intel operator.' };
-  if (compositeScore > 160) return { label: 'ELITE HACKER', tier: 2, blurb: 'Sharp, consistent investigator.' };
-  if (compositeScore > 110) return { label: 'CYBER SEC PRO', tier: 3, blurb: 'Solid, dependable judgement.' };
-  if (compositeScore > 60) return { label: 'VIGILANT NODE', tier: 4, blurb: 'Getting there — keep training.' };
+export function getDesignation(compositeScore: number): DesignationInfo {
+  // Max score is now 150 (15 stimuli × 10)
+  if (compositeScore >= 130) return { label: 'NETRUNNER SUPREME', tier: 1, blurb: 'Elite threat-intel operator.' };
+  if (compositeScore >= 100) return { label: 'ELITE HACKER', tier: 2, blurb: 'Sharp, consistent investigator.' };
+  if (compositeScore >= 70) return { label: 'CYBER SEC PRO', tier: 3, blurb: 'Solid, dependable judgement.' };
+  if (compositeScore >= 40) return { label: 'VIGILANT NODE', tier: 4, blurb: 'Getting there — keep training.' };
   return { label: 'ROOKIE', tier: 5, blurb: 'Just getting started.' };
 }
 
@@ -62,13 +63,33 @@ export interface PerformanceAnalysis {
   tierStats: TierStat[];
   levelInterpretation: string;
   basePointsPerCorrect: number;
+  // NEW: Enhanced metrics
+  attentionToDetail: number; // 0-100
+  accuracy: number;          // 0-100
+  efficiency: number;        // 0-100
+  completionTimeMs: number;
+  completionTimeFormatted: string;
+  correctClassifications: number;
+  incorrectClassifications: number;
+  threatDetectionRate: number;  // % of phishing stimuli correctly handled
+  safeDetectionRate: number;    // % of safe stimuli correctly handled
+  pressureAnalysis: string;
+  performsUnderPressure: boolean;
+  softSkills: string[];
 }
 
 function pct(n: number, d: number): number {
   return d > 0 ? Math.round((n / d) * 100) : 0;
 }
 
-export function analyzePerformance(history: GameHistoryEntry[], health: number): PerformanceAnalysis {
+function formatTime(ms: number): string {
+  const totalSec = Math.round(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}m ${sec.toString().padStart(2, '0')}s`;
+}
+
+export function analyzePerformance(history: GameHistoryEntry[], completionTimeMs: number): PerformanceAnalysis {
   const compositeScore = computeTotalScore(history);
 
   // Per-element tally across the whole run.
@@ -79,6 +100,19 @@ export function analyzePerformance(history: GameHistoryEntry[], health: number):
 
   let threatsTotal = 0, threatsCaught = 0;
   let safeTotal = 0, safeCorrect = 0, falseAccusations = 0;
+  let totalElements = 0;
+  let correctElementClassifications = 0;
+  let incorrectElementClassifications = 0;
+  let totalSuspiciousElements = 0;
+  let suspiciousElementsFound = 0;
+  let ignoredSuspicious = 0;
+
+  // Per-round accuracy for pressure analysis
+  const roundAccuracies: Record<number, { correct: number; total: number }> = {};
+
+  // Phish vs safe stimulus counts
+  let phishStimuliTotal = 0, phishStimuliCorrect = 0;
+  let safeStimuliTotal = 0, safeStimuliCorrect = 0;
 
   history.forEach(h => {
     const stimulus = GAME_STIMULI.find(s => s.id === h.stimulusId);
@@ -89,23 +123,57 @@ export function analyzePerformance(history: GameHistoryEntry[], health: number):
       if (h.isCorrect) tierMap[stimulus.difficultyTier].correct++;
     }
 
+    // Track round accuracy for pressure analysis
+    const round = h.roundNumber || stimulus.difficultyTier;
+    if (!roundAccuracies[round]) roundAccuracies[round] = { correct: 0, total: 0 };
+    roundAccuracies[round].total++;
+    if (h.isCorrect) roundAccuracies[round].correct++;
+
+    // Is this a phishing or safe stimulus?
+    const hasSuspiciousElement = ELEMENT_IDS.some(id => {
+      const el = (stimulus as unknown as Record<string, ElementData | undefined>)[id];
+      return el?.isSuspicious;
+    });
+    if (hasSuspiciousElement) {
+      phishStimuliTotal++;
+      if (h.isCorrect) phishStimuliCorrect++;
+    } else {
+      safeStimuliTotal++;
+      if (h.isCorrect) safeStimuliCorrect++;
+    }
+
     ELEMENT_IDS.forEach(id => {
       const el = (stimulus as unknown) as Record<string, ElementData | undefined>;
       const trueEl = el[id];
       if (!trueEl) return;
       const inv = h.investigations[id];
       const status = inv?.status;
+      totalElements++;
 
       if (trueEl.isSuspicious) {
         const axis = reasonToAxis(trueEl.reason);
         axisTotals[axis].total++;
         threatsTotal++;
-        if (status === 'SUSPICIOUS') { axisTotals[axis].correct++; threatsCaught++; }
+        totalSuspiciousElements++;
+        if (status === 'SUSPICIOUS') {
+          axisTotals[axis].correct++;
+          threatsCaught++;
+          suspiciousElementsFound++;
+          correctElementClassifications++;
+        } else {
+          if (!status || status === 'SAFE') ignoredSuspicious++;
+          incorrectElementClassifications++;
+        }
       } else {
         axisTotals['Safe Verification'].total++;
         safeTotal++;
-        if (status === 'SAFE') { axisTotals['Safe Verification'].correct++; safeCorrect++; }
-        if (status === 'SUSPICIOUS') falseAccusations++;
+        if (status === 'SUSPICIOUS') {
+          falseAccusations++;
+          incorrectElementClassifications++;
+        } else {
+          safeCorrect++;
+          correctElementClassifications++;
+        }
       }
     });
   });
@@ -144,7 +212,83 @@ export function analyzePerformance(history: GameHistoryEntry[], health: number):
   const falseAccusationRate = pct(falseAccusations, safeTotal);
   const stimulusAccuracy = pct(stimuliCorrect, stimuliTotal);
 
-  const designation = getDesignation(compositeScore, health);
+  const designation = getDesignation(compositeScore);
+
+  // --- NEW METRICS ---
+
+  // Attention to Detail: ratio of suspicious elements found vs total suspicious elements
+  const attentionToDetail = totalSuspiciousElements > 0
+    ? Math.round((suspiciousElementsFound / totalSuspiciousElements) * 100)
+    : 100;
+
+  // Accuracy: element-level correct classifications / total element opportunities
+  const accuracy = totalElements > 0
+    ? Math.round((correctElementClassifications / totalElements) * 100)
+    : 0;
+
+  // Efficiency: weighted combination of accuracy and speed
+  // Target ~5 minutes (300,000ms). Faster = higher efficiency.
+  const speedFactor = Math.max(0, 1 - Math.min(completionTimeMs / 600000, 1)); // 0-1 scale, 10min = 0
+  const efficiency = Math.round(0.6 * accuracy + 0.4 * speedFactor * 100);
+
+  const completionTimeFormatted = formatTime(completionTimeMs);
+
+  // Threat & Safe detection rates (stimulus-level)
+  const threatDetectionRate = pct(phishStimuliCorrect, phishStimuliTotal);
+  const safeDetectionRate = pct(safeStimuliCorrect, safeStimuliTotal);
+
+  // --- PRESSURE ANALYSIS ---
+  const earlyRounds = [1, 2].filter(r => roundAccuracies[r]);
+  const lateRounds = [4, 5].filter(r => roundAccuracies[r]);
+  const earlyAcc = earlyRounds.length > 0
+    ? Math.round(earlyRounds.reduce((s, r) => s + pct(roundAccuracies[r].correct, roundAccuracies[r].total), 0) / earlyRounds.length)
+    : null;
+  const lateAcc = lateRounds.length > 0
+    ? Math.round(lateRounds.reduce((s, r) => s + pct(roundAccuracies[r].correct, roundAccuracies[r].total), 0) / lateRounds.length)
+    : null;
+  const tookTooLong = completionTimeMs > 600000; // > 10 min
+  const accDroppedLate = earlyAcc !== null && lateAcc !== null && (earlyAcc - lateAcc) > 15;
+
+  let performsUnderPressure = true;
+  let pressureAnalysis: string;
+  if (tookTooLong && accDroppedLate) {
+    performsUnderPressure = false;
+    pressureAnalysis = `Your accuracy dropped from ${earlyAcc}% in early rounds to ${lateAcc}% in later rounds, and you took ${completionTimeFormatted} — longer than the expected ~5 minutes. This pattern suggests difficulty maintaining focus under sustained pressure. Practice with timed scenarios to build stamina.`;
+  } else if (accDroppedLate) {
+    performsUnderPressure = false;
+    pressureAnalysis = `You started strong (${earlyAcc}% early) but accuracy fell to ${lateAcc}% in the harder rounds. The increasing difficulty appeared to affect your judgement. Focus on maintaining composure as complexity rises.`;
+  } else if (tookTooLong) {
+    pressureAnalysis = `You took ${completionTimeFormatted} — more than expected, but maintained consistent accuracy throughout. You're thorough and methodical, though faster decision-making would improve your efficiency score.`;
+  } else if (earlyAcc !== null && lateAcc !== null && lateAcc >= earlyAcc) {
+    pressureAnalysis = `Excellent performance under pressure — your accuracy improved from ${earlyAcc}% to ${lateAcc}% as difficulty increased, completing in ${completionTimeFormatted}. You thrive when the stakes are high.`;
+  } else {
+    pressureAnalysis = `You maintained consistent performance throughout the assessment (${completionTimeFormatted}). Your decision-making held steady across all difficulty levels — a sign of reliable composure under pressure.`;
+  }
+
+  // --- SOFT SKILLS ---
+  const softSkills: string[] = [];
+  if (attentionToDetail >= 85) softSkills.push('High Attention to Detail');
+  else if (attentionToDetail < 50) softSkills.push('Needs Better Observation');
+
+  if (accuracy >= 85) softSkills.push('Good Analytical Thinking');
+  else if (accuracy < 50) softSkills.push('Needs Better Accuracy');
+
+  if (threatDetectionRate >= 75) softSkills.push('Strong Threat Recognition');
+  if (safeDetectionRate >= 75 && falseAccusationRate <= 15) softSkills.push('Good Judgment Under Uncertainty');
+
+  // Consistency (spread of round accuracies)
+  const roundAccValues = Object.values(roundAccuracies).map(r => pct(r.correct, r.total));
+  const spread = roundAccValues.length > 1 ? Math.max(...roundAccValues) - Math.min(...roundAccValues) : 0;
+  if (spread <= 20 && roundAccValues.length >= 3) softSkills.push('Consistent Decision Making');
+
+  if (performsUnderPressure && lateAcc !== null && lateAcc >= 60) softSkills.push('Works Well Under Pressure');
+  if (!performsUnderPressure) softSkills.push('Decision Making Under Pressure Needs Work');
+
+  if (efficiency >= 75) softSkills.push('Efficient & Decisive');
+  if (falseAccusationRate <= 10 && safeTotal > 0) softSkills.push('Low False Alarm Rate');
+
+  // Ensure at least one skill is shown
+  if (softSkills.length === 0) softSkills.push('Developing Cyber Awareness');
 
   // --- Strengths ---
   const strengths: string[] = [];
@@ -153,6 +297,7 @@ export function analyzePerformance(history: GameHistoryEntry[], health: number):
   if (strongest && strongest.accuracy >= 75) strengths.push(`Best detection area: ${strongest.category.toLowerCase()} (${strongest.accuracy}% accuracy).`);
   if (safeCorrectPct >= 75 && safeTotal > 0) strengths.push(`Good at verifying legitimate messages — ${safeCorrectPct}% correctly cleared as safe.`);
   if (falseAccusationRate <= 10 && safeTotal > 0) strengths.push(`Disciplined judgement: only ${falseAccusations} false accusation${falseAccusations === 1 ? '' : 's'} across ${safeTotal} safe elements.`);
+  if (attentionToDetail >= 80) strengths.push(`Excellent attention to detail — identified ${attentionToDetail}% of all suspicious indicators.`);
   if (strengths.length === 0) strengths.push('You engaged with every case — that willingness to investigate is the right instinct to build on.');
 
   // --- Weaknesses ---
@@ -161,6 +306,7 @@ export function analyzePerformance(history: GameHistoryEntry[], health: number):
   if (threatsCaughtPct < 60 && threatsTotal > 0) weaknesses.push(`Missed a notable share of threats — ${threatsTotal - threatsCaught} of ${threatsTotal} malicious cues went unflagged.`);
   if (weakest && weakest.accuracy < 60 && seenAxes.length > 1) weaknesses.push(`Weakest detection area: ${weakest.category.toLowerCase()} (${weakest.accuracy}% accuracy).`);
   if (falseAccusationRate > 25 && safeTotal > 0) weaknesses.push(`Tendency to over-flag — ${falseAccusations} safe element${falseAccusations === 1 ? '' : 's'} wrongly marked as threats (${falseAccusationRate}%).`);
+  if (attentionToDetail < 50 && totalSuspiciousElements > 0) weaknesses.push(`Low attention to detail — only ${attentionToDetail}% of suspicious indicators were identified. Many threats were overlooked.`);
   if (weaknesses.length === 0) weaknesses.push(`No single weak spot stood out — aim to push your strongest areas even higher.`);
 
   // --- Recommendations ---
@@ -169,14 +315,14 @@ export function analyzePerformance(history: GameHistoryEntry[], health: number):
   if (threatsCaughtPct < 75 && threatsTotal > 0) recommendations.push(`Slow down on urgent payment, KYC and delivery messages; verify the sender/domain before trusting urgency.`);
   if (falseAccusationRate > 20) recommendations.push(`Before flagging, confirm the sender domain and link destination — over-flagging wastes trust.`);
   if (stimulusAccuracy < 70) recommendations.push(`Replay a level to pattern-match against common phish structures (lookalike domains, masked shortcodes).`);
-  recommendations.push(`Keep your “trust but verify” habit: hover links, check sender handles, and never share OTPs.`);
+  recommendations.push(`Keep your "trust but verify" habit: hover links, check sender handles, and never share OTPs.`);
   // de-dup + cap
   const uniqueRecs = Array.from(new Set(recommendations)).slice(0, 4);
 
   // --- Personalized designation rationale ---
   const designationWhy = buildDesignationWhy(designation, { stimuliCorrect, stimuliTotal, stimulusAccuracy, threatsCaughtPct, falseAccusationRate, threatsTotal });
 
-  const summary = `You correctly classified ${stimuliCorrect} of ${stimuliTotal} stimuli (${stimulusAccuracy}%), catching ${threatsCaught} of ${threatsTotal} malicious cue${threatsTotal === 1 ? '' : 's'} while keeping false accusations at ${falseAccusationRate}%. ${designation.blurb}`;
+  const summary = `You correctly classified ${stimuliCorrect} of ${stimuliTotal} stimuli (${stimulusAccuracy}%), catching ${threatsCaught} of ${threatsTotal} malicious cue${threatsTotal === 1 ? '' : 's'} while keeping false accusations at ${falseAccusationRate}%. Completed in ${completionTimeFormatted}. ${designation.blurb}`;
 
   // --- Readiness ---
   const readinessLevel = deriveReadiness(compositeScore, stimulusAccuracy, falseAccusationRate);
@@ -199,6 +345,19 @@ export function analyzePerformance(history: GameHistoryEntry[], health: number):
     radarData, categoryStats, strongestCategory: strongest?.category, weakestCategory: weakest?.category,
     radarInterpretation, levelData, tierStats, levelInterpretation,
     basePointsPerCorrect: CORRECT_STIMULUS_POINTS,
+    // NEW enhanced metrics
+    attentionToDetail,
+    accuracy,
+    efficiency,
+    completionTimeMs,
+    completionTimeFormatted,
+    correctClassifications: correctElementClassifications,
+    incorrectClassifications: incorrectElementClassifications,
+    threatDetectionRate,
+    safeDetectionRate,
+    pressureAnalysis,
+    performsUnderPressure,
+    softSkills,
   };
 }
 
@@ -217,9 +376,9 @@ function buildDesignationWhy(
 }
 
 function deriveReadiness(score: number, acc: number, falseRate: number): PerformanceAnalysis['readinessLevel'] {
-  if (score > 200 && acc >= 85 && falseRate <= 10) return 'ELITE';
-  if (score > 150 && acc >= 65) return 'HIGH';
-  if (score > 80) return 'MODERATE';
+  if (score >= 120 && acc >= 85 && falseRate <= 10) return 'ELITE';
+  if (score >= 90 && acc >= 65) return 'HIGH';
+  if (score >= 50) return 'MODERATE';
   return 'LOW';
 }
 

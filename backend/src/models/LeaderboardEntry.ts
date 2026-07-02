@@ -19,6 +19,7 @@ const leaderboardEntrySchema = new Schema<ILeaderboardEntry>(
     stimuliCorrect: { type: Number, default: 0 },
     stimuliIncorrect: { type: Number, default: 0 },
     avgResponseTimeMs: { type: Number },
+    completionTimeMs: { type: Number, index: true }, // total game duration; lower = faster (tiebreaker)
     completedAt: { type: Date, default: Date.now, index: true },
   },
   { timestamps: true }

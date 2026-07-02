@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ShieldCheck, Crosshair, LogIn, UserPlus, Mail, Lock, User, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
+import { LogIn, UserPlus, Mail, Lock, User, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import logoUrl from '../../assets/ZeTheta logo.jpg';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
@@ -69,11 +70,8 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
     <div className="flex flex-col items-center justify-center min-h-screen px-4 py-12 relative z-10 bg-cyber-grid bg-[#0d0d1a]">
       <div className="absolute top-0 w-full h-2 bg-gradient-to-r from-pink-500 via-cyan-400 to-yellow-400 opacity-80" />
 
-      <div className="absolute top-5 left-5 md:top-8 md:left-10 z-20 flex items-center gap-2">
-        <div className="relative w-12 h-12 cyber-clip bg-[#0d0d1a] border-2 border-cyan-400 cyber-glow flex items-center justify-center">
-          <ShieldCheck className="w-6 h-6 text-cyan-400" strokeWidth={2.5} />
-          <Crosshair className="w-3.5 h-3.5 text-pink-500 -ml-2 -mb-2.5" strokeWidth={2.5} />
-        </div>
+      <div className="absolute top-5 left-5 md:top-8 md:left-10 z-20 flex items-center gap-3">
+        <img src={logoUrl} alt="ZeTheta Logo" className="w-24 h-24 md:w-32 md:h-32 object-contain" />
         <span className="font-display font-black tracking-[0.3em] text-cyan-300 text-sm uppercase">Spot the Phish</span>
       </div>
 

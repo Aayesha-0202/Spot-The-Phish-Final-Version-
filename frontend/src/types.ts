@@ -29,6 +29,8 @@ export type StimulusCategory =
   | 'Tax / Government Notices'
   | 'E-commerce / Orders'
   | 'KYC Updates'
+  | 'Insurance'
+  | 'Mutual Funds'
   | 'Other / Service';
 
 export interface Stimulus {
@@ -54,10 +56,11 @@ export type GamePhase = 'LOBBY' | 'INTRO' | 'TUTORIAL' | 'PLAYING' | 'INVESTIGAT
 export interface GameHistoryEntry {
   stimulusId: string;
   investigations: Partial<Record<ElementId, InvestigationData>>;
-  scoreChange: number; // raw signed score for this stimulus (before streak multiplier)
+  scoreChange: number; // proportional score awarded (0-10)
   streakMultiplier: number; // multiplier applied to this stimulus
-  isCorrect: boolean; // fully-correct classification — drives the streak
-  healthChange: number;
+  isCorrect: boolean; // score >= 8 (80%+) drives the streak
+  roundNumber?: number; // which round (1-5) this stimulus was in
+  responseTimeMs?: number; // time taken for this stimulus
 }
 
 export interface RoundSummary {
@@ -69,12 +72,12 @@ export interface RoundSummary {
 export interface GameState {
   phase: GamePhase;
   playerName: string; // entered on the landing screen — shown on the report/share image
-  score: number; // live composite score (0-1000)
-  health: number; // Simulate "false accusation penalties"
-  lives: number;
+  score: number; // live composite score (0-150 max)
   streak: number; // consecutive correct stimuli (drives the streak multiplier)
   currentRound: number;
   currentStimulusIndex: number;
-  usedStimulusIds: string[]; // stimuli already shown this run — prevents repeats
+  usedStimuliIds: string[]; // stimuli already shown this run — prevents repeats
   history: GameHistoryEntry[];
+  gameStartTime: number | null; // ms timestamp when game started, never reset
+  completionTimeMs: number | null; // total time taken to finish the game
 }

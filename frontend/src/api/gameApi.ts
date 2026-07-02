@@ -21,6 +21,7 @@ export const gameApi = {
       stimulusId: string;
       category: string;
       tier: number;
+      roundNumber?: number;
       playerChoice?: string;
       correctAnswer?: unknown;
       investigations?: unknown;
