@@ -12,7 +12,7 @@ router.get('/recent', optionalAuth, ctrl.recent);
 router.get('/by-period', optionalAuth, ctrl.byPeriod);
 
 // Authenticated: submit + personal rank/best.
-router.post('/submit', requireAuth, validate(submitLeaderboardSchema), ctrl.submit);
+router.post('/submit', optionalAuth, validate(submitLeaderboardSchema), ctrl.submit);
 router.get('/rank', requireAuth, ctrl.myRank);
 router.get('/best', requireAuth, ctrl.myBest);
 

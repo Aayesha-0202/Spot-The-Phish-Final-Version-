@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../../store/gameStore';
 import { useAuthStore } from '../../store/authStore';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
@@ -180,12 +181,13 @@ function drawBullets(ctx: CanvasRenderingContext2D, items: string[], x: number, 
 }
 
 export const ResultsScreen = () => {
-  const { completionTimeMs, history, playerName, resetGame, playerEmail, reportEmailStatus, reportEmailMessage, sendReportEmail, lastFullyCompleted, rankedSessionId } = useGameStore();
+  const navigate = useNavigate();
+  const { completionTimeMs, history, playerName, resetGame, playerEmail, reportEmailStatus, reportEmailMessage, sendReportEmail, lastFullyCompleted, rankedSessionId, scoreBreakdown, leaderboardRank, totalPlayers, isNewBest } = useGameStore();
   const [isExporting, setIsExporting] = useState(false);
   const sentRef = useRef(false);
   const [cardDataUrl, setCardDataUrl] = useState<string | null>(null);
 
-  const analysis = useMemo<PerformanceAnalysis>(() => analyzePerformance(history, completionTimeMs || 0), [history, completionTimeMs]);
+  const analysis = useMemo<PerformanceAnalysis>(() => analyzePerformance(history, completionTimeMs || 0, scoreBreakdown.finalScore), [history, completionTimeMs, scoreBreakdown.finalScore]);
 
   // Render the share card once and auto-email it (no extra button click) if the
   // player gave an email. Guarded against React StrictMode double-invoke.
@@ -294,11 +296,11 @@ export const ResultsScreen = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
           {/* Main Score Card */}
-          <div className="cyber-clip-lg p-10 lg:col-span-2 flex flex-col shadow-2xl relative bg-[#0a0515] border-2 border-cyan-400 cyber-glow">
+           <div className="cyber-clip-lg p-4 md:p-10 lg:col-span-2 flex flex-col shadow-2xl relative bg-[#0a0515] border-2 border-cyan-400 cyber-glow">
             <div className="z-10 relative">
                <div className="text-cyan-400 tracking-[0.3em] text-sm font-bold uppercase mb-1 font-display">Agent // {playerName?.trim() ? playerName : 'Anonymous'}</div>
                <div className="text-cyan-400 tracking-[0.3em] text-sm font-bold uppercase mb-2 font-display">Final Score</div>
-               <div className="text-[5rem] md:text-[7rem] leading-none font-black text-white font-mono cyber-glow-text">
+               <div className="text-[3rem] md:text-[5rem] leading-none font-black text-white font-mono cyber-glow-text">
                  {analysis.compositeScore}<span className="text-2xl text-slate-500 font-mono align-top ml-2">PTS</span>
                </div>
 
@@ -321,11 +323,54 @@ export const ResultsScreen = () => {
                    { k: 'Time Taken', v: analysis.completionTimeFormatted },
                  ].map(s => (
                    <div key={s.k} className="bg-black/40 p-3 border border-slate-800 cyber-clip text-center">
-                     <div className="text-slate-500 text-[9px] font-bold uppercase tracking-widest">{s.k}</div>
+                     <div className="text-slate-500 text-[11px] font-bold uppercase tracking-widest">{s.k}</div>
                      <div className="text-lg font-mono font-bold text-white">{s.v}</div>
                    </div>
                  ))}
-               </div>
+                </div>
+
+                {/* Score Breakdown */}
+                <div className="mt-6 bg-black/40 p-4 border border-slate-800 cyber-clip">
+                  <div className="text-slate-500 text-[11px] font-bold uppercase tracking-widest mb-3">Score Breakdown</div>
+                  <div className="space-y-2 font-mono text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Base Score ({analysis.stimuliCorrect}/{analysis.stimuliTotal} correct)</span>
+                      <span className="text-white">{scoreBreakdown.baseScore}</span>
+                    </div>
+                    {scoreBreakdown.streakMultiplier > 1 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Streak Multiplier</span>
+                        <span className="text-yellow-400">{scoreBreakdown.streakMultiplier.toFixed(2)}×</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Time Bonus</span>
+                      <span className="text-cyan-400">+{scoreBreakdown.timeBonus}</span>
+                    </div>
+                    {scoreBreakdown.accuracyBonus > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Accuracy Bonus</span>
+                        <span className="text-green-400">+{scoreBreakdown.accuracyBonus}</span>
+                      </div>
+                    )}
+                    {scoreBreakdown.completionBonus > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Speed Bonus</span>
+                        <span className="text-green-400">+{scoreBreakdown.completionBonus}</span>
+                      </div>
+                    )}
+                    {scoreBreakdown.longestStreakBonus > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Streak Bonus</span>
+                        <span className="text-pink-400">+{scoreBreakdown.longestStreakBonus}</span>
+                      </div>
+                    )}
+                    <div className="border-t border-slate-700 pt-2 flex justify-between font-bold">
+                      <span className="text-white">Final Score</span>
+                      <span className="text-cyan-400 text-lg">{scoreBreakdown.finalScore}</span>
+                    </div>
+                  </div>
+                </div>
             </div>
           </div>
 
@@ -365,14 +410,26 @@ export const ResultsScreen = () => {
 
             {/* Ranked confirmation */}
             {rankedSessionId && lastFullyCompleted && (
-              <div className="mb-4 p-3 border border-cyan-500/40 bg-cyan-500/10 text-cyan-200 text-xs font-mono flex items-center gap-2 cyber-clip">
-                <Trophy /> Your score has been submitted to the global leaderboard.
+              <div className="mb-4 p-3 border border-cyan-500/40 bg-cyan-500/10 text-cyan-200 text-xs font-mono flex flex-col gap-1 cyber-clip">
+                <div className="flex items-center gap-2">
+                  <Trophy /> Your score has been submitted to the global leaderboard.
+                </div>
+                {leaderboardRank && (
+                  <div className="flex items-center gap-2 text-yellow-300">
+                    <span className="font-black">#{leaderboardRank}</span>
+                    {totalPlayers > 0 && <span>of {totalPlayers} players</span>}
+                    {isNewBest && <span className="text-green-400 font-bold">— New Personal Best!</span>}
+                  </div>
+                )}
               </div>
             )}
-            {!lastFullyCompleted && !rankedSessionId && useAuthStore.getState().isAuthenticated && (
-              <div className="mb-4 p-3 border border-yellow-500/40 bg-yellow-500/5 text-yellow-200/80 text-xs font-mono flex items-center gap-2 cyber-clip">
-                <AlertTriangle /> Leaderboard submission requires completing all 5 levels.
-              </div>
+            {lastFullyCompleted && (
+              <button
+                onClick={() => navigate('/leaderboard')}
+                className="mb-4 w-full py-2 text-xs uppercase tracking-widest font-bold text-cyan-300 border border-cyan-500/40 cyber-clip hover:bg-cyan-500/20 transition-colors"
+              >
+                View Full Leaderboard
+              </button>
             )}
             {!useAuthStore.getState().isAuthenticated && !useAuthStore.getState().isGuest && (
               <div className="mb-4 p-3 border border-yellow-500/40 bg-yellow-500/5 text-yellow-200/80 text-xs font-mono flex items-center gap-2 cyber-clip">
@@ -380,7 +437,7 @@ export const ResultsScreen = () => {
               </div>
             )}
 
-            <div className="flex flex-col gap-4 mt-auto">
+            <div className="flex flex-col gap-4">
               <button onClick={handleDownload} disabled={isExporting} className="w-full cyber-clip gap-2 py-4 bg-yellow-400/10 border-2 border-yellow-400 text-yellow-400 hover:bg-yellow-400 hover:text-black font-bold uppercase tracking-widest transition-all flex justify-center items-center disabled:opacity-60">
                 <Download className="w-5 h-5" />
                 {isExporting ? 'Compiling...' : 'Download Asset'}
@@ -392,15 +449,15 @@ export const ResultsScreen = () => {
               <div className="grid grid-cols-3 gap-3">
                  <a href={linkedinUrl} target="_blank" rel="noopener noreferrer" className="cyber-clip flex flex-col items-center justify-center gap-1 p-3 bg-blue-600/20 border border-blue-500 hover:bg-blue-600/40 transition">
                    <Linkedin className="w-4 h-4 text-blue-400" />
-                   <span className="text-[10px] uppercase tracking-widest font-bold text-white">LinkedIn</span>
+                   <span className="text-[12px] uppercase tracking-widest font-bold text-white">LinkedIn</span>
                  </a>
                  <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="cyber-clip flex flex-col items-center justify-center gap-1 p-3 bg-green-600/20 border border-green-500 hover:bg-green-600/40 transition">
                    <MessageCircle className="w-4 h-4 text-green-400" />
-                   <span className="text-[10px] uppercase tracking-widest font-bold text-white">WhatsApp</span>
+                   <span className="text-[12px] uppercase tracking-widest font-bold text-white">WhatsApp</span>
                  </a>
                  <a href={xUrl} target="_blank" rel="noopener noreferrer" className="cyber-clip flex flex-col items-center justify-center gap-1 p-3 bg-white/10 border border-white/30 hover:bg-white/20 transition">
                    <span className="font-bold text-base leading-none text-white">𝕏</span>
-                   <span className="text-[10px] uppercase tracking-widest font-bold text-white">Post</span>
+                   <span className="text-[12px] uppercase tracking-widest font-bold text-white">Post</span>
                  </a>
               </div>
 
@@ -425,7 +482,7 @@ export const ResultsScreen = () => {
                 { label: 'Investigation Efficiency', val: `${analysis.efficiency}%`, desc: 'Weighted speed + accuracy index', color: 'text-yellow-400' },
                 { label: 'Total Duration', val: analysis.completionTimeFormatted, desc: 'Continuous elapsed time', color: 'text-green-400' }
               ].map((m) => (
-                <div key={m.label} className="bg-black/50 p-8 border-t-2 border-slate-700/60 rounded-lg text-center space-y-3 hover:border-cyan-500/40 transition-colors">
+                <div key={m.label} className="bg-black/50 p-4 md:p-8 border-t-2 border-slate-700/60 rounded-lg text-center space-y-3 hover:border-cyan-500/40 transition-colors">
                   <div className="text-slate-400 text-sm font-bold uppercase tracking-wider">{m.label}</div>
                   <div className={`text-4xl md:text-5xl font-black font-mono ${m.color}`}>{m.val}</div>
                   <div className="text-slate-500 text-xs uppercase font-mono tracking-widest">{m.desc}</div>
@@ -520,11 +577,11 @@ export const ResultsScreen = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-black/40 p-5 border-l-4 border-pink-500">
-                <div className="text-pink-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-2">Why you earned "{analysis.designation.label}"</div>
+                <div className="text-pink-400 text-[12px] font-bold uppercase tracking-[0.2em] mb-2">Why you earned "{analysis.designation.label}"</div>
                 <p className="text-slate-200 text-sm leading-relaxed font-mono">{analysis.designationWhy}</p>
               </div>
               <div className="bg-black/40 p-5 border-l-4 border-cyan-400">
-                <div className="text-cyan-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-2">Overall Summary</div>
+                <div className="text-cyan-400 text-[12px] font-bold uppercase tracking-[0.2em] mb-2">Overall Summary</div>
                 <p className="text-slate-200 text-sm leading-relaxed font-mono">{analysis.summary}</p>
               </div>
             </div>
@@ -563,7 +620,7 @@ export const ResultsScreen = () => {
               <p className="text-pink-100/70 leading-relaxed text-xs font-mono">{analysis.radarInterpretation}</p>
               <div className="pt-2 flex flex-col gap-2">
                 {analysis.categoryStats.map(c => (
-                  <div key={c.category} className="flex justify-between items-center text-[10px] uppercase font-bold tracking-widest">
+                  <div key={c.category} className="flex justify-between items-center text-[12px] uppercase font-bold tracking-widest">
                     <span className="text-slate-400">{c.category}</span>
                     <span className={c.total === 0 ? 'text-slate-600' : c.accuracy > 70 ? 'text-cyan-400' : c.accuracy > 40 ? 'text-yellow-400' : 'text-red-400'}>
                       {c.total === 0 ? '—' : `${c.accuracy}%`}
@@ -576,7 +633,7 @@ export const ResultsScreen = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart cx="50%" cy="50%" outerRadius="75%" data={analysis.radarData}>
                   <PolarGrid stroke="rgba(255,0,127,0.3)" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: 'rgba(255,0,127,0.85)', fontSize: 10, fontWeight: 'bold', fontFamily: 'Orbitron' }} />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: 'rgba(255,0,127,0.85)', fontSize: 12, fontWeight: 'bold', fontFamily: 'Orbitron' }} />
                   <Radar name="Accuracy" dataKey="A" stroke="#00ffff" strokeWidth={3} fill="#00ffff" fillOpacity={0.2} />
                 </RadarChart>
               </ResponsiveContainer>
@@ -591,14 +648,14 @@ export const ResultsScreen = () => {
                 <h3 className="text-2xl font-display font-black text-cyan-300 uppercase tracking-widest">Level Progression</h3>
               </div>
               <p className="text-cyan-100/70 leading-relaxed text-xs font-mono">{analysis.levelInterpretation}</p>
-              <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold">Accuracy (%) across the five difficulty levels</p>
+              <p className="text-slate-500 text-[12px] uppercase tracking-widest font-bold">Accuracy (%) across the five difficulty levels</p>
             </div>
             <div className="w-full md:w-2/3 h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={analysis.levelData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid stroke="rgba(34,211,238,0.1)" vertical={false} />
                   <XAxis dataKey="level" tick={{ fill: '#22d3ee', fontSize: 12, fontWeight: 'bold' }} axisLine={{ stroke: 'rgba(34,211,238,0.3)' }} tickLine={false} />
-                  <YAxis domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
                   <Tooltip cursor={{ fill: 'rgba(34,211,238,0.08)' }} contentStyle={{ background: '#0d0d1a', border: '1px solid rgba(34,211,238,0.4)', color: '#fff', borderRadius: 0, fontSize: 12 }} formatter={(v: number) => [`${v}%`, 'Accuracy']} />
                   <Bar dataKey="accuracy" radius={[4, 4, 0, 0]}>
                     {analysis.levelData.map((d, i) => <Cell key={i} fill={barColor(d.accuracy)} />)}

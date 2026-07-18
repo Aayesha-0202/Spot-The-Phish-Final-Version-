@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "lint": "tsc --noEmit",
     "seed": "tsx src/scripts/seedStimuli.ts",
-    "seed:prod": "node dist/scripts/seedStimuli.js"
+    "seed:prod": "node dist/scripts/seedStimuli.js",
+    "fix:leaderboard": "tsx src/scripts/fixLeaderboardDuplicates.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

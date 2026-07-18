@@ -19,11 +19,12 @@ export interface DesignationInfo {
   blurb: string;
 }
 
-export function getDesignation(compositeScore: number): DesignationInfo {
-  // Max score is now 150 (15 stimuli × 10)
-  if (compositeScore >= 130) return { label: 'NETRUNNER SUPREME', tier: 1, blurb: 'Elite threat-intel operator.' };
-  if (compositeScore >= 100) return { label: 'ELITE HACKER', tier: 2, blurb: 'Sharp, consistent investigator.' };
-  if (compositeScore >= 70) return { label: 'CYBER SEC PRO', tier: 3, blurb: 'Solid, dependable judgement.' };
+export function getDesignation(compositeScore: number, threatsCaughtPct: number = 0, stimulusAccuracy: number = 0): DesignationInfo {
+  // Designation requires BOTH a high score AND meaningful threat detection.
+  // Prevents players with 0% threat detection from earning top designations.
+  if (compositeScore >= 130 && threatsCaughtPct >= 50 && stimulusAccuracy >= 60) return { label: 'NETRUNNER SUPREME', tier: 1, blurb: 'Elite threat-intel operator.' };
+  if (compositeScore >= 100 && threatsCaughtPct >= 30 && stimulusAccuracy >= 50) return { label: 'ELITE HACKER', tier: 2, blurb: 'Sharp, consistent investigator.' };
+  if (compositeScore >= 70 && threatsCaughtPct >= 15) return { label: 'CYBER SEC PRO', tier: 3, blurb: 'Solid, dependable judgement.' };
   if (compositeScore >= 40) return { label: 'VIGILANT NODE', tier: 4, blurb: 'Getting there — keep training.' };
   return { label: 'ROOKIE', tier: 5, blurb: 'Just getting started.' };
 }
@@ -89,8 +90,8 @@ function formatTime(ms: number): string {
   return `${min}m ${sec.toString().padStart(2, '0')}s`;
 }
 
-export function analyzePerformance(history: GameHistoryEntry[], completionTimeMs: number): PerformanceAnalysis {
-  const compositeScore = computeTotalScore(history);
+export function analyzePerformance(history: GameHistoryEntry[], completionTimeMs: number, finalScore?: number): PerformanceAnalysis {
+  const compositeScore = finalScore ?? computeTotalScore(history);
 
   // Per-element tally across the whole run.
   const axisTotals: Record<string, { correct: number; total: number }> = {};
@@ -212,7 +213,7 @@ export function analyzePerformance(history: GameHistoryEntry[], completionTimeMs
   const falseAccusationRate = pct(falseAccusations, safeTotal);
   const stimulusAccuracy = pct(stimuliCorrect, stimuliTotal);
 
-  const designation = getDesignation(compositeScore);
+  const designation = getDesignation(compositeScore, threatsCaughtPct, stimulusAccuracy);
 
   // --- NEW METRICS ---
 

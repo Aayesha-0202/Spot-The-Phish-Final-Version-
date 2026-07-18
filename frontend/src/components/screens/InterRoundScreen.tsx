@@ -5,9 +5,8 @@ import { ROUND_SUMMARIES } from '../../data/stimuli';
 import { motion } from 'framer-motion';
 
 export const InterRoundScreen = () => {
-  const { currentRound, score, streak, setPhase, gameStartTime } = useGameStore();
+  const { currentRound, score, streak, streakMultiplier, setPhase, gameStartTime, pausedTimeAccumulator, roundPauseStart } = useGameStore();
   const [countdown, setCountdown] = useState(3);
-  const [elapsedTime, setElapsedTime] = useState(0);
   const roundData = ROUND_SUMMARIES[currentRound] || ROUND_SUMMARIES[1];
 
   useEffect(() => {
@@ -19,14 +18,7 @@ export const InterRoundScreen = () => {
     }
   }, [countdown, setPhase]);
 
-  useEffect(() => {
-    if (!gameStartTime) return;
-    setElapsedTime(Date.now() - gameStartTime);
-    const timer = setInterval(() => {
-      setElapsedTime(Date.now() - gameStartTime);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [gameStartTime]);
+  const elapsedTime = (roundPauseStart || Date.now()) - (gameStartTime || 0) - pausedTimeAccumulator;
 
   const formatElapsedTime = (ms: number) => {
     const totalSec = Math.floor(ms / 1000);
@@ -48,7 +40,7 @@ export const InterRoundScreen = () => {
         transition={{ duration: 0.4 }}
         className="w-full max-w-4xl"
       >
-        <div className="cyber-clip bg-[#100727] border-2 border-cyan-400 p-10 md:p-16 relative cyber-glow">
+        <div className="cyber-clip bg-[#100727] border-2 border-cyan-400 p-4 md:p-10 lg:p-16 relative cyber-glow">
            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-pink-500 to-cyan-400 opacity-80" />
            
            <div className="text-cyan-400 font-bold tracking-[0.3em] font-display text-sm md:text-lg mb-6 uppercase">Level {currentRound} of 5 Initiating</div>
@@ -56,7 +48,7 @@ export const InterRoundScreen = () => {
            <h2 className="text-4xl md:text-6xl font-black text-white mb-4 font-display cyber-glow-text uppercase tracking-widest">{roundData.name}</h2>
 
            <div className="mb-6">
-             <span className="inline-block text-[11px] md:text-xs font-bold tracking-[0.25em] uppercase text-yellow-300 border border-yellow-400/40 bg-yellow-400/5 px-3 py-1.5 cyber-clip">
+             <span className="inline-block text-[13px] md:text-xs font-bold tracking-[0.25em] uppercase text-yellow-300 border border-yellow-400/40 bg-yellow-400/5 px-3 py-1.5 cyber-clip">
                Cue visibility: {roundData.cueVisibility}
              </span>
            </div>
@@ -67,18 +59,23 @@ export const InterRoundScreen = () => {
            
            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16 max-w-3xl mx-auto">
              <div className="bg-black/50 p-6 border-l-4 border-cyan-400 cyber-clip">
-                <div className="text-[10px] md:text-xs font-bold tracking-[0.2em] uppercase text-cyan-400/70 mb-2">Current Score</div>
+                <div className="text-[12px] md:text-xs font-bold tracking-[0.2em] uppercase text-cyan-400/70 mb-2">Current Score</div>
                 <div className="text-3xl md:text-4xl font-mono font-black text-white">{score}</div>
              </div>
-             <div className="bg-black/50 p-6 border-l-4 border-pink-500 cyber-clip">
-                <div className="text-[10px] md:text-xs font-bold tracking-[0.2em] uppercase text-pink-400/70 mb-2">Active Streak</div>
-                <div className="text-3xl md:text-4xl font-mono font-black text-pink-500 drop-shadow-md flex items-center justify-center gap-1">
-                  {streak}<span className="text-xl md:text-2xl">×</span>
-                  {streak === 0 && <span className="text-xs md:text-sm text-pink-500/50 font-mono font-bold uppercase tracking-widest">none</span>}
-                </div>
-             </div>
+              <div className="bg-black/50 p-6 border-l-4 border-pink-500 cyber-clip">
+                 <div className="text-[12px] md:text-xs font-bold tracking-[0.2em] uppercase text-pink-400/70 mb-2">Active Streak</div>
+                 <div className="text-3xl md:text-4xl font-mono font-black text-pink-500 drop-shadow-md flex items-center justify-center gap-1">
+                   {streak}<span className="text-xl md:text-2xl">×</span>
+                   {streak === 0 && <span className="text-xs md:text-sm text-pink-500/50 font-mono font-bold uppercase tracking-widest">none</span>}
+                 </div>
+                 {streakMultiplier > 1 && (
+                   <div className="text-[11px] font-mono font-bold text-yellow-300 tracking-wider mt-2">
+                     {streakMultiplier.toFixed(2)}× multiplier active
+                   </div>
+                 )}
+              </div>
              <div className="bg-black/50 p-6 border-l-4 border-yellow-500 cyber-clip">
-                <div className="text-[10px] md:text-xs font-bold tracking-[0.2em] uppercase text-yellow-400/70 mb-2">Time Elapsed</div>
+                <div className="text-[12px] md:text-xs font-bold tracking-[0.2em] uppercase text-yellow-400/70 mb-2">Time Elapsed</div>
                 <div className="text-3xl md:text-4xl font-mono font-black text-yellow-400">{formatElapsedTime(elapsedTime)}</div>
              </div>
            </div>

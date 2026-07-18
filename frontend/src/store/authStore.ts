@@ -64,6 +64,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
       } catch {
         /* ignore — clear locally regardless */
       }
+      // Clear the persistent player id so the next account gets a fresh one.
+      try { localStorage.removeItem('stp_player_id'); } catch { /* ignore */ }
       set({ user: null, isAuthenticated: false, isGuest: false });
     },
 

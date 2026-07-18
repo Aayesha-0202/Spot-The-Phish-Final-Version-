@@ -2,6 +2,7 @@ import { createApp } from './app';
 import { connectDB, disconnectDB } from './config/db';
 import { env } from './config/env';
 import { verifyMailer } from './config/mailer';
+import { deduplicateLeaderboard, startBackgroundDedup } from './services/leaderboardService';
 import { logger } from './utils/logger';
 
 async function bootstrap() {
@@ -10,10 +11,15 @@ async function bootstrap() {
 
     // Kick off Mongo connection in the background (fail-graceful — see config/db.ts).
     // The HTTP server starts regardless of Mongo availability.
-    connectDB().catch((err) => logger.error('Initial Mongo connect failed:', (err as Error).message));
+    connectDB()
+      .then(() => deduplicateLeaderboard())
+      .then(() => startBackgroundDedup())
+      .catch((err) => logger.error('Initial Mongo connect failed:', (err as Error).message));
 
-    // Verify the SMTP transport (logged, never fatal).
-    verifyMailer().catch(() => undefined);
+    // Verify the SMTP transport — log clearly so config issues are visible.
+    verifyMailer()
+      .then(() => logger.info('✅ SMTP transport ready — report emails will be delivered'))
+      .catch((err) => logger.error('❌ SMTP transport verification FAILED — report emails will NOT send:', (err as Error).message));
 
     const server = app.listen(env.PORT, () => {
       logger.info(`🚀 Spot the Phish API ready on http://localhost:${env.PORT}`);

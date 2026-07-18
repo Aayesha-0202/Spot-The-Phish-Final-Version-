@@ -1,16 +1,18 @@
-# ---- Serve pre-built assets with nginx ----
+# ---- Stage 1: Build frontend ----
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# ---- Stage 2: Serve with nginx sidecar ----
 FROM nginx:alpine
-WORKDIR /usr/share/nginx/html
-
-# Copy pre-built static assets
-COPY dist /usr/share/nginx/html
-
-# Copy nginx config with SPA fallback and reverse proxy
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost/health || exit 1
-
+COPY --from=builder /app/dist /usr/share/nginx/html
+# NOTE: When building from root context (docker-compose), use root Dockerfile instead.
+# This Dockerfile is for standalone frontend-only builds.
+# Copy sidecar.conf into this directory first, then build with: docker build -f frontend/Dockerfile .
+HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost/ || exit 1
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

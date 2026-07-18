@@ -56,6 +56,11 @@ const envSchema = z.object({
   // When true, forgot-password/reset links are printed to the server log instead of
   // emailed — handy for local dev without an SMTP server configured.
   PRINT_RESET_LINKS: z.coerce.boolean().default(false),
+
+  // ---- Admin ----
+  ADMIN_USERNAME: z.string().min(1, 'ADMIN_USERNAME is required'),
+  ADMIN_PASSWORD: z.string().min(1, 'ADMIN_PASSWORD is required'),
+  ADMIN_JWT_SECRET: z.string().min(16, 'ADMIN_JWT_SECRET must be at least 16 chars'),
 });
 
 const parsed = envSchema.safeParse(process.env);

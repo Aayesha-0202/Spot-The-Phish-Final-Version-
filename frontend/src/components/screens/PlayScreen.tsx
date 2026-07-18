@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { ElementId, ClassificationStatus, ClassificationReason } from '../../types';
 import { MAX_SCORE } from '../../data/scoring';
-import { CheckCircle, AlertTriangle, HelpCircle, X, ArrowRight, Zap, Crosshair, Clock, Flame } from 'lucide-react';
+import { EFFECT_DURATIONS, StreakMilestone } from '../../data/streak';
+import { CheckCircle, AlertTriangle, HelpCircle, X, ArrowRight, Zap, Crosshair, Clock, Flame, Star, Crown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { StimulusCardRenderer } from '../game/StimulusCardRenderer';
 
@@ -24,13 +25,17 @@ export const PlayScreen = () => {
     phase,
     score,
     streak,
+    streakMultiplier,
+    streakMilestone,
+    noInvestigationStreak,
     history,
     investigateElement,
     submitInvestigation,
     proceedToNextCard,
     currentInvestigations,
     startGame,
-    gameStartTime
+    gameStartTime,
+    pausedTimeAccumulator
   } = useGameStore();
 
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -41,14 +46,14 @@ export const PlayScreen = () => {
       return;
     }
     
-    setElapsedTime(Date.now() - gameStartTime);
+    setElapsedTime(Date.now() - gameStartTime - pausedTimeAccumulator);
 
     const interval = setInterval(() => {
-      setElapsedTime(Date.now() - gameStartTime);
+      setElapsedTime(Date.now() - gameStartTime - pausedTimeAccumulator);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [gameStartTime]);
+  }, [gameStartTime, pausedTimeAccumulator]);
 
   const formatElapsedTime = (ms: number) => {
     const totalSec = Math.floor(ms / 1000);
@@ -74,19 +79,50 @@ export const PlayScreen = () => {
   // Points awarded on the just-submitted case (exactly +10 when correct) — surfaced in the review.
   const lastScore = history.length ? history[history.length - 1].scoreChange : 0;
 
-  // Streak toast: surfaces a short notification whenever the player reaches 3+ correct in a row.
-  const [streakToast, setStreakToast] = useState<number | null>(null);
+  // Streak toast: surfaces a short notification whenever a streak milestone is reached.
+  const [streakToast, setStreakToast] = useState<{ count: number; multiplier: number; milestone: StreakMilestone } | null>(null);
   const prevStreakRef = useRef(0);
   useEffect(() => {
-    // Only toast on an INCREASE into the 3+ zone (not on re-renders or decreases).
-    if (streak >= 3 && streak > prevStreakRef.current) {
-      setStreakToast(streak);
-      const t = setTimeout(() => setStreakToast(null), 2800);
+    // Fire on every milestone increase (streakMilestone changes when a new tier is hit).
+    if (streakMilestone && streak > prevStreakRef.current) {
+      const duration = EFFECT_DURATIONS[streakMilestone.effect].toastMs;
+      setStreakToast({ count: streak, multiplier: streakMultiplier, milestone: streakMilestone });
+      const t = setTimeout(() => setStreakToast(null), duration);
       prevStreakRef.current = streak;
       return () => clearTimeout(t);
     }
     prevStreakRef.current = streak;
-  }, [streak]);
+  }, [streak, streakMilestone, streakMultiplier]);
+
+  // Flash overlay for visual punch on milestone hits.
+  const [flashColor, setFlashColor] = useState<string | null>(null);
+  useEffect(() => {
+    if (streakMilestone && streak > prevStreakRef.current) {
+      const colors: Record<StreakMilestone['effect'], string> = {
+        smallFlash: 'from-pink-500/30 to-transparent',
+        mediumFlash: 'from-yellow-400/40 to-transparent',
+        largeFlash: 'from-cyan-400/50 to-transparent',
+        cinematic: 'from-purple-500/60 via-pink-500/40 to-transparent',
+      };
+      const dur = EFFECT_DURATIONS[streakMilestone.effect].flashMs;
+      setFlashColor(colors[streakMilestone.effect]);
+      const t = setTimeout(() => setFlashColor(null), dur);
+      return () => clearTimeout(t);
+    }
+  }, [streak, streakMilestone]);
+
+  // "Read carefully" warning: shown after 3 consecutive empty submits, auto-dismisses after 15s.
+  const [showReadWarning, setShowReadWarning] = useState(false);
+  useEffect(() => {
+    if (noInvestigationStreak >= 3) {
+      setShowReadWarning(true);
+      const t = setTimeout(() => setShowReadWarning(false), 15000);
+      return () => clearTimeout(t);
+    }
+  }, [noInvestigationStreak]);
+
+  // Tutorial highlight: show when in tutorial, no investigation yet, and no element selected
+  const showTutorialHighlight = isTutorial && !hasInvestigation && !selectedElement;
 
   if (!currentStimulus) return null;
 
@@ -123,7 +159,7 @@ export const PlayScreen = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen relative w-full overflow-hidden bg-cyber-grid bg-[#0d0d1a]">
+    <div className="flex flex-col min-h-screen relative w-full overflow-y-auto bg-cyber-grid bg-[#0d0d1a]">
 
       {/* Top HUD Bar */}
       <div className="w-full flex justify-between items-start px-4 md:px-8 pt-4 z-40 pointer-events-none">
@@ -134,7 +170,7 @@ export const PlayScreen = () => {
              <Clock className="w-5 h-5 md:w-6 md:h-6 text-pink-500" />
            </div>
            <div className="flex flex-col">
-             <span className="text-[9px] uppercase tracking-[0.2em] font-mono text-pink-400 font-bold leading-none mb-1">Time Elapsed</span>
+             <span className="text-[13px] uppercase tracking-[0.2em] font-mono text-pink-400 font-bold leading-none mb-1">Time Elapsed</span>
              <span className="text-white font-mono font-black text-lg md:text-xl leading-none">{formatElapsedTime(elapsedTime)}</span>
            </div>
         </div>
@@ -146,12 +182,12 @@ export const PlayScreen = () => {
               {isTutorial ? 'PRACTICE' : `LEVEL ${currentRound} OF 5`}
             </span>
             {isTutorial ? (
-              <span className="block text-pink-300/70 text-[10px] mt-1 font-mono tracking-[0.2em] uppercase">Follow the guided prompts</span>
+              <span className="block text-pink-300/70 text-[12px] mt-1 font-mono tracking-[0.2em] uppercase">Follow the guided prompts</span>
             ) : (
-              <span className="block text-cyan-300/70 text-[10px] mt-1 font-mono tracking-[0.2em] uppercase">Case {currentStimulusIndex + 1} of {queue.length}</span>
+              <span className="block text-cyan-300/70 text-[12px] mt-1 font-mono tracking-[0.2em] uppercase">Case {currentStimulusIndex + 1} of {queue.length}</span>
             )}
           </div>
-          <div className="text-cyan-400 text-[10px] mt-2 uppercase tracking-[0.3em] font-bold">
+          <div className="text-cyan-400 text-[12px] mt-2 uppercase tracking-[0.3em] font-bold">
             {phase === 'INVESTIGATION_REVIEW' ? 'Review Phase' : 'Active Investigation'}
           </div>
           {isTutorial && (
@@ -163,10 +199,22 @@ export const PlayScreen = () => {
 
         {/* Score Bar */}
         <div className="flex items-center gap-3">
+           {/* Multiplier badge */}
+           {streakMultiplier > 1 && (
+             <div className="cyber-clip bg-yellow-500/20 border border-yellow-400 px-3 py-1 text-yellow-300 text-xs font-mono font-bold tracking-wider">
+               {streakMultiplier.toFixed(2)}×
+             </div>
+           )}
+           <div className="flex md:hidden flex-col items-end gap-1.5">
+              <div className="flex justify-between items-baseline">
+                <span className="text-cyan-300 text-lg font-mono font-black tabular-nums leading-none">{score}</span>
+                <span className="text-cyan-400 text-[11px] uppercase tracking-[0.25em] font-bold ml-2">PTS</span>
+              </div>
+           </div>
            <div className="hidden md:flex flex-col items-end gap-1.5">
              <div className="flex justify-between items-baseline w-60">
                <span className="text-cyan-300 text-xl font-mono font-black tabular-nums leading-none">{score}</span>
-               <span className="text-cyan-400 text-[11px] uppercase tracking-[0.25em] font-bold">Score</span>
+               <span className="text-cyan-400 text-[13px] uppercase tracking-[0.25em] font-bold">Score</span>
              </div>
              <div className="w-60 h-4 bg-[#1a0f2e] border border-cyan-500/50 p-[3px] cyber-clip">
                <div className="h-full bg-gradient-to-r from-cyan-500 to-cyan-300 transition-all duration-700 ease-out" style={{ width: `${Math.min(100, Math.max(0, (score / MAX_SCORE) * 100))}%` }} />
@@ -189,17 +237,41 @@ export const PlayScreen = () => {
                 onElementClick={handleElementClick}
                 investigations={currentInvestigations}
                 showResults={phase === 'INVESTIGATION_REVIEW'}
+                tutorialHighlightSender={showTutorialHighlight}
               />
           </div>
+
+          {/* Tutorial tooltip — points to the sender name */}
+          <AnimatePresence>
+            {showTutorialHighlight && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
+                className="absolute top-[52px] left-1/2 -translate-x-1/2 z-50 pointer-events-none"
+              >
+                <div className="relative">
+                  <div className="bg-[#0d0d1a] border-2 border-cyan-400 rounded-lg px-3 py-2 shadow-[0_0_15px_rgba(6,182,212,0.4)] max-w-[200px]">
+                    <p className="text-cyan-300 text-[13px] font-mono font-bold uppercase tracking-wider text-center leading-tight">
+                      Tap this sender name here
+                    </p>
+                  </div>
+                  {/* Arrow pointing down */}
+                  <div className="absolute left-1/2 -translate-x-1/2 -bottom-2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-cyan-400" />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Main Action Button */}
           <div className="mt-4 w-full max-w-[290px] pointer-events-auto">
              {phase === 'INVESTIGATION_REVIEW' ? (
                <button
                  onClick={proceedToNextCard}
-                 className="w-full py-4 cyber-clip bg-cyan-400 text-black text-xl tracking-[0.2em] font-display uppercase font-black hover:bg-cyan-300 transition-all cyber-glow flex justify-center items-center gap-3 group/btn animate-pulse"
+                  className="w-full py-4 px-8 cyber-clip bg-cyan-400 text-black text-xl tracking-[0.2em] font-display uppercase font-black hover:bg-cyan-300 transition-all cyber-glow flex justify-center items-center gap-3 group/btn animate-pulse"
                >
-                 {isTutorial ? 'FINISH PRACTICE' : 'CONTINUE'} <ArrowRight className="w-6 h-6 group-hover/btn:translate-x-1 transition-transform" />
+                  {isTutorial ? 'FINISH PRACTICE' : 'CONTINUE'} <ArrowRight className="w-6 h-6 -ml-1 group-hover/btn:translate-x-1 transition-transform" />
                </button>
              ) : phase === 'TUTORIAL' ? (
                hasInvestigation && !selectedElement ? (
@@ -210,7 +282,7 @@ export const PlayScreen = () => {
                    SUBMIT <Crosshair className="w-6 h-6 fill-black group-hover/btn:scale-110 transition-transform" />
                  </button>
                ) : (
-                 <div className="w-full py-4 text-center text-[11px] uppercase tracking-widest text-slate-500 font-mono border border-dashed border-slate-700 cyber-clip">
+                 <div className="w-full py-4 text-center text-[13px] uppercase tracking-widest text-slate-500 font-mono border border-dashed border-slate-700 cyber-clip">
                    {selectedElement ? 'Choose a classification →' : 'Tap an element on the phone to begin'}
                  </div>
                )
@@ -236,11 +308,17 @@ export const PlayScreen = () => {
                    <p className="text-pink-300/80 text-xs font-mono uppercase tracking-widest border border-pink-500/30 bg-pink-500/5 px-3 py-1.5">
                      ✓ That's the workflow — the real investigation begins next.
                    </p>
-                 ) : (
-                   <span className={`inline-block text-sm font-black uppercase tracking-widest px-4 py-1.5 cyber-clip border ${lastScore > 0 ? 'text-green-400 border-green-500/40 bg-green-500/10' : 'text-slate-400 border-slate-600 bg-slate-700/20'}`}>
-                     {lastScore > 0 ? `+${lastScore} PTS · CORRECT READ` : `+0 PTS · MISSED CUES`}
-                   </span>
-                 )}
+                  ) : (
+                    <span className={`inline-block text-sm font-black uppercase tracking-widest px-4 py-1.5 cyber-clip border ${
+                      lastScore > 0
+                        ? 'text-green-400 border-green-500/40 bg-green-500/10'
+                        : lastScore < 0
+                          ? 'text-red-400 border-red-500/40 bg-red-500/10'
+                          : 'text-slate-400 border-slate-600 bg-slate-700/20'
+                    }`}>
+                      {lastScore > 0 ? `+${lastScore} PTS · CORRECT READ` : lastScore < 0 ? `${lastScore} PTS · WRONG CALL` : `0 PTS · NO CREDIT`}
+                    </span>
+                  )}
                  <p className="text-cyan-100 text-base leading-relaxed bg-cyan-950/50 p-5 border-l-4 border-cyan-400 font-mono shadow-inner shadow-cyan-900/50">
                    {currentStimulus.explanation}
                  </p>
@@ -282,7 +360,7 @@ export const PlayScreen = () => {
                </div>
 
                {isTutorial && (
-                 <p className="text-[11px] text-pink-300/80 font-mono mb-4 bg-pink-500/5 border border-pink-500/20 p-2">
+                 <p className="text-[13px] text-pink-300/80 font-mono mb-4 bg-pink-500/5 border border-pink-500/20 p-2">
                    <span className="font-bold">Guided:</span> this sender is legitimate — choose <span className="text-green-400 font-bold">Clean</span>, then tap Log Data.
                  </p>
                )}
@@ -324,7 +402,7 @@ export const PlayScreen = () => {
 
                {modalStatus === 'SUSPICIOUS' && (
                   <div className="mb-6 animate-in fade-in">
-                    <p className="text-[10px] font-bold text-yellow-400 uppercase mb-2 tracking-[0.2em]">Select Vector</p>
+                    <p className="text-[12px] font-bold text-yellow-400 uppercase mb-2 tracking-[0.2em]">Select Vector</p>
                     <select
                        className="w-full bg-black/60 border border-yellow-400/50 text-white p-3 text-sm font-mono focus:border-yellow-400 outline-none cyber-clip"
                        onChange={(e) => handleSaveInvestigation(e.target.value as ClassificationReason)}
@@ -349,7 +427,7 @@ export const PlayScreen = () => {
                )}
 
                {currentInvestigations[selectedElement] && (
-                 <button onClick={handleClearInvestigation} className="mt-4 text-[10px] uppercase tracking-widest text-slate-500 hover:text-red-400 w-full text-center font-bold">
+                 <button onClick={handleClearInvestigation} className="mt-4 text-[12px] uppercase tracking-widest text-slate-500 hover:text-red-400 w-full text-center font-bold">
                    Purge Selection
                  </button>
                )}
@@ -359,7 +437,7 @@ export const PlayScreen = () => {
              <div className="cyber-clip-lg bg-[#100727] border-2 border-pink-500/50 p-6 cyber-glow-pink relative">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-pink-500 to-transparent" />
                 <div className="mb-4">
-                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-pink-400 border border-pink-500/40 px-2 py-1">Practice Round</span>
+                  <span className="text-[12px] font-black uppercase tracking-[0.3em] text-pink-400 border border-pink-500/40 px-2 py-1">Practice Round</span>
                 </div>
                 <h3 className="font-display font-black text-2xl text-white mb-3 uppercase tracking-widest">
                   {hasInvestigation ? 'Lock it in' : 'Tap to investigate'}
@@ -369,8 +447,8 @@ export const PlayScreen = () => {
                     ? 'Nice work. Now press SUBMIT below to score this case and see how the investigation review works.'
                     : 'This is a safe bank SMS. Tap the sender name on the phone to open the investigation panel — the same action you\'ll use on every real case.'}
                 </p>
-                <div className="flex items-start gap-2 text-[11px] text-yellow-300/80 font-mono bg-yellow-400/5 border border-yellow-400/20 p-3">
-                  <Zap className="w-4 h-4 shrink-0 mt-0.5" /> Practice rounds don't affect your score or lives.
+                <div className="flex items-start gap-2 text-[13px] text-yellow-300/80 font-mono bg-yellow-400/5 border border-yellow-400/20 p-3">
+                   <Zap className="w-4 h-4 shrink-0 mt-0.5" /> Practice rounds don't affect your score.
                 </div>
              </div>
           ) : (
@@ -384,24 +462,71 @@ export const PlayScreen = () => {
 
       </div>
 
-      {/* Streak notification — slides in on the right when the player hits 3+ correct in a row */}
+      {/* Flash overlay — full-screen radial burst on milestone hit */}
+      <AnimatePresence>
+        {flashColor && (
+          <motion.div
+            key="streak-flash"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className={`fixed inset-0 z-50 pointer-events-none bg-gradient-radial ${flashColor}`}
+            style={{ background: `radial-gradient(circle at center, ${flashColor.includes('purple') ? 'rgba(168,85,247,0.35)' : flashColor.includes('cyan') ? 'rgba(34,211,238,0.3)' : flashColor.includes('yellow') ? 'rgba(250,204,21,0.3)' : 'rgba(236,72,153,0.25)'} 0%, transparent 70%)` }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Streak notification — slides in on the right when a milestone is reached */}
       <AnimatePresence>
         {streakToast !== null && (
           <motion.div
-            key={streakToast}
-            initial={{ x: 140, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 140, opacity: 0 }}
+            key={streakToast.count}
+            initial={{ x: 160, opacity: 0, scale: 0.85 }}
+            animate={{ x: 0, opacity: 1, scale: 1 }}
+            exit={{ x: 160, opacity: 0, scale: 0.85 }}
             transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-            className="fixed right-4 md:right-8 top-1/2 -translate-y-1/2 z-50 pointer-events-none"
+            className="fixed right-2 md:right-8 top-1/2 -translate-y-1/2 z-50 pointer-events-none max-w-[200px] md:max-w-none"
           >
             <div className="cyber-clip bg-[#100727] border-2 border-pink-500 px-5 py-4 cyber-glow-pink flex items-center gap-3 shadow-2xl">
-              <Flame className="w-7 h-7 text-pink-500 fill-pink-500/40 animate-pulse" />
+              {streakToast.milestone.effect === 'cinematic' ? (
+                <Crown className="w-8 h-8 text-yellow-400 fill-yellow-400/40" />
+              ) : streakToast.milestone.effect === 'largeFlash' ? (
+                <Star className="w-7 h-7 text-cyan-400 fill-cyan-400/40" />
+              ) : streakToast.milestone.effect === 'mediumFlash' ? (
+                <Star className="w-7 h-7 text-yellow-300 fill-yellow-300/40" />
+              ) : (
+                <Flame className="w-7 h-7 text-pink-500 fill-pink-500/40 animate-pulse" />
+              )}
               <div className="text-left">
-                <div className="text-[10px] uppercase tracking-[0.25em] text-pink-300/70 font-bold font-mono">Streak Active</div>
-                <div className="text-3xl font-black text-white font-display tracking-wider leading-none mt-1">
-                  🔥 {streakToast}<span className="text-pink-500">×</span> <span className="text-base text-pink-400">STREAK</span>
+                <div className="text-[11px] uppercase tracking-[0.25em] text-pink-300/70 font-bold font-mono">
+                  {streakToast.milestone.message}
                 </div>
+                <div className="text-2xl font-black text-white font-display tracking-wider leading-none mt-1">
+                  🔥 {streakToast.count}× <span className="text-pink-500">{streakToast.multiplier.toFixed(2)}×</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* "Read carefully" warning — appears after 3 consecutive empty submits */}
+      <AnimatePresence>
+        {showReadWarning && (
+          <motion.div
+            key="read-warning"
+            initial={{ y: -60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -60, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none"
+          >
+            <div className="bg-red-950/90 border-2 border-red-500 px-4 md:px-8 py-3 md:py-4 cyber-clip shadow-2xl flex items-center gap-3 md:gap-4 max-w-[90vw] md:max-w-none">
+              <AlertTriangle className="w-6 h-6 md:w-8 md:h-8 text-red-400 shrink-0" />
+              <div>
+                <div className="text-red-300 font-display font-black text-sm md:text-lg uppercase tracking-widest">Read carefully before answering.</div>
+                <div className="text-red-400/60 text-xs font-mono mt-1">Select elements and classify them — don't just click Submit.</div>
               </div>
             </div>
           </motion.div>

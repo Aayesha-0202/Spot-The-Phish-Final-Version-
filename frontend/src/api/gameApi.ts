@@ -9,8 +9,10 @@ export const gameApi = {
   upsertPlayer: (playerId: string, name: string, email?: string, userId?: string) =>
     api.post('/players', { playerId, name, email, userId }),
   getPlayer: (playerId: string) => api.get(`/players/${playerId}`),
+  getPlayerByUserId: (userId: string) => api.get(`/players/by-user/${userId}`),
   updatePlayer: (playerId: string, name: string) =>
     api.patch(`/players/${playerId}`, { name }),
+  getPlayerProfile: (playerId: string) => api.get(`/players/${playerId}/profile`),
 
   // Sessions
   startSession: (sessionId: string, playerId: string) =>
@@ -56,7 +58,6 @@ export const gameApi = {
   emailReport: (
     sessionId: string,
     data: {
-      playerName?: string;
       compositeScore?: number;
       designation?: string;
       reportSummary?: string;
@@ -77,4 +78,14 @@ export const gameApi = {
   categoryAnalytics: () => api.get('/analytics/categories'),
   tierAnalytics: () => api.get('/analytics/tiers'),
   leaderboard: (limit = 10) => api.get(`/analytics/leaderboard?limit=${limit}`),
+
+  // Gameplay Rotation System
+  generateGameplay: (playerId: string) =>
+    api.post('/gameplay/generate', { playerId }),
+  getPlayerHistory: (playerId: string) =>
+    api.get(`/gameplay/history/${playerId}`),
+  getAllPlayersHistory: () =>
+    api.get('/gameplay/admin/players'),
+  resetPlayerHistory: (playerId: string) =>
+    api.delete(`/gameplay/history/${playerId}`),
 };

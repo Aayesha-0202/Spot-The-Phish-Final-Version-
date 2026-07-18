@@ -14,3 +14,4 @@ export { Round } from './Round';
 export { Stimulus } from './Stimulus';
 export { ExposureCounter } from './ExposureCounter';
 export { LeaderboardEntry } from './LeaderboardEntry';
+export { PlayerStimulusHistory } from './PlayerStimulusHistory';

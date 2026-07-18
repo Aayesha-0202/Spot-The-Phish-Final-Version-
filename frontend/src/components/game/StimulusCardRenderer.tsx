@@ -15,10 +15,11 @@ interface InvestigateableProps {
   className?: string;
   showResults?: boolean;
   actualStatus?: boolean; // isSuspicious from data
+  isHighlighted?: boolean; // Tutorial: pulsing glow to draw attention
 }
 
 const InvestigateableElement: React.FC<InvestigateableProps> = ({ 
-  id, children, onElementClick, investigation, className, showResults, actualStatus 
+  id, children, onElementClick, investigation, className, showResults, actualStatus, isHighlighted 
 }) => {
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -64,8 +65,10 @@ const InvestigateableElement: React.FC<InvestigateableProps> = ({
         "cursor-pointer transition-all border-2 rounded-md hover:ring-2 hover:ring-indigo-400/50 relative overflow-visible pointer-events-auto",
         borderClass,
         bgClass,
+        isHighlighted && "border-cyan-400 ring-2 ring-cyan-400/60 shadow-[0_0_20px_rgba(6,182,212,0.5)]",
         className
       )}
+      style={isHighlighted ? { animation: 'tutorial-pulse 2s ease-in-out infinite' } : undefined}
     >
       {children}
       {showResults && (
@@ -82,9 +85,10 @@ interface BaseCardProps {
   onElementClick?: (id: ElementId) => void;
   investigations: Partial<Record<ElementId, InvestigationData>>;
   showResults?: boolean;
+  tutorialHighlightSender?: boolean;
 }
 
-const WhatsAppCard = ({ stimulus, onElementClick, investigations, showResults }: BaseCardProps) => {
+const WhatsAppCard = ({ stimulus, onElementClick, investigations, showResults, tutorialHighlightSender }: BaseCardProps) => {
   return (
     <div className="w-full h-full bg-[#E5DDD5] flex flex-col font-sans relative overflow-hidden select-none text-slate-800">
       <div className="bg-[#075E54] text-white px-3 py-3 flex items-center justify-between shadow-md z-10 w-full mb-1 pointer-events-none">
@@ -93,9 +97,9 @@ const WhatsAppCard = ({ stimulus, onElementClick, investigations, showResults }:
           <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center overflow-hidden shrink-0">
              <User className="w-6 h-6 opacity-60 mt-1" />
           </div>
-          <InvestigateableElement id="sender" onElementClick={onElementClick} investigation={investigations['sender']} showResults={showResults} actualStatus={stimulus.sender.isSuspicious} className="flex flex-col ml-1 px-1 -mx-1">
+          <InvestigateableElement id="sender" onElementClick={onElementClick} investigation={investigations['sender']} showResults={showResults} actualStatus={stimulus.sender.isSuspicious} isHighlighted={tutorialHighlightSender} className="flex flex-col ml-1 px-1 -mx-1">
             <span className="font-semibold text-[15px] leading-tight truncate max-w-[140px]">{stimulus.sender.text}</span>
-            <span className="text-[11px] text-white/80">online</span>
+            <span className="text-[13px] text-white/80">online</span>
           </InvestigateableElement>
         </div>
         <div className="flex items-center gap-4 opacity-90">
@@ -106,7 +110,7 @@ const WhatsAppCard = ({ stimulus, onElementClick, investigations, showResults }:
       </div>
 
       <div className="flex-1 p-4 flex flex-col justify-end pb-4">
-        <div className="self-center bg-[#E1F3FB] text-slate-600 text-[11px] px-3 py-1 rounded-lg mb-3 shadow-sm uppercase shadow-black/5 pointer-events-none">
+        <div className="self-center bg-[#E1F3FB] text-slate-600 text-[13px] px-3 py-1 rounded-lg mb-3 shadow-sm uppercase shadow-black/5 pointer-events-none">
           Today
         </div>
 
@@ -120,7 +124,7 @@ const WhatsAppCard = ({ stimulus, onElementClick, investigations, showResults }:
                 {stimulus.actionUrl.text}
              </InvestigateableElement>
           )}
-          <div className="absolute right-2 bottom-1 text-[10px] text-slate-400 font-medium pointer-events-none">
+          <div className="absolute right-2 bottom-1 text-[12px] text-slate-400 font-medium pointer-events-none">
             11:42 am
           </div>
         </div>
@@ -129,7 +133,7 @@ const WhatsAppCard = ({ stimulus, onElementClick, investigations, showResults }:
   );
 };
 
-const SMSCard = ({ stimulus, onElementClick, investigations, showResults }: BaseCardProps) => {
+const SMSCard = ({ stimulus, onElementClick, investigations, showResults, tutorialHighlightSender }: BaseCardProps) => {
   return (
     <div className="w-full h-full bg-white flex flex-col font-sans relative overflow-hidden select-none text-slate-800">
       <div className="bg-slate-50 border-b border-slate-200 px-2 py-2 flex items-center justify-between pb-3 pt-6 z-10 w-full pointer-events-none">
@@ -137,7 +141,7 @@ const SMSCard = ({ stimulus, onElementClick, investigations, showResults }: Base
           <ChevronLeft className="w-7 h-7" />
           <span className="text-[17px] -ml-1">Filters</span>
         </div>
-        <InvestigateableElement id="sender" onElementClick={onElementClick} investigation={investigations['sender']} showResults={showResults} actualStatus={stimulus.sender.isSuspicious} className="flex flex-col items-center flex-1 -ml-4 px-2">
+        <InvestigateableElement id="sender" onElementClick={onElementClick} investigation={investigations['sender']} showResults={showResults} actualStatus={stimulus.sender.isSuspicious} isHighlighted={tutorialHighlightSender} className="flex flex-col items-center flex-1 -ml-4 px-2">
           <div className="w-10 h-10 rounded-full bg-slate-300 flex items-center justify-center mb-1 overflow-hidden text-white font-bold text-lg">
              {stimulus.sender.text.charAt(0).toUpperCase()}
           </div>
@@ -161,7 +165,7 @@ const SMSCard = ({ stimulus, onElementClick, investigations, showResults }: Base
   );
 };
 
-const EmailCard = ({ stimulus, onElementClick, investigations, showResults }: BaseCardProps) => {
+const EmailCard = ({ stimulus, onElementClick, investigations, showResults, tutorialHighlightSender }: BaseCardProps) => {
   return (
     <div className="w-full h-full bg-white flex flex-col font-sans relative overflow-hidden select-none text-slate-800">
       <div className="bg-white border-b border-slate-100 flex items-center gap-4 px-4 py-4 pt-6 z-10 w-full shadow-sm pointer-events-none">
@@ -178,7 +182,7 @@ const EmailCard = ({ stimulus, onElementClick, investigations, showResults }: Ba
                {stimulus.sender.text.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1">
-               <InvestigateableElement id="sender" onElementClick={onElementClick} investigation={investigations['sender']} showResults={showResults} actualStatus={stimulus.sender.isSuspicious} className="flex flex-col w-full px-1">
+               <InvestigateableElement id="sender" onElementClick={onElementClick} investigation={investigations['sender']} showResults={showResults} actualStatus={stimulus.sender.isSuspicious} isHighlighted={tutorialHighlightSender} className="flex flex-col w-full px-1">
                   <div className="font-bold text-slate-800 text-[15px] truncate">{stimulus.sender.text.split('@')[0]}</div>
                   <div className="text-xs text-slate-500 truncate">{stimulus.sender.text}</div>
                </InvestigateableElement>
@@ -201,7 +205,7 @@ const EmailCard = ({ stimulus, onElementClick, investigations, showResults }: Ba
   );
 };
 
-const UPICard = ({ stimulus, onElementClick, investigations, showResults }: BaseCardProps) => {
+const UPICard = ({ stimulus, onElementClick, investigations, showResults, tutorialHighlightSender }: BaseCardProps) => {
   return (
     <div className="w-full h-full bg-white flex flex-col font-sans relative overflow-hidden select-none text-slate-800">
       <div className="bg-white flex items-center gap-4 px-4 py-4 pt-6 z-10 w-full shadow-sm border-b border-slate-100 pointer-events-none">
@@ -213,7 +217,7 @@ const UPICard = ({ stimulus, onElementClick, investigations, showResults }: Base
              {stimulus.sender.text.charAt(0).toUpperCase()}
          </div>
          
-         <InvestigateableElement id="sender" onElementClick={onElementClick} investigation={investigations['sender']} showResults={showResults} actualStatus={stimulus.sender.isSuspicious} className="flex flex-col items-center px-4 w-full">
+         <InvestigateableElement id="sender" onElementClick={onElementClick} investigation={investigations['sender']} showResults={showResults} actualStatus={stimulus.sender.isSuspicious} isHighlighted={tutorialHighlightSender} className="flex flex-col items-center px-4 w-full">
            <div className="font-semibold text-lg text-slate-900 w-full text-center">{stimulus.sender.text.split('@')[0]}</div>
            <div className="text-slate-500 text-sm mb-6">{stimulus.sender.text}</div>
          </InvestigateableElement>
@@ -237,7 +241,7 @@ const UPICard = ({ stimulus, onElementClick, investigations, showResults }: Base
   );
 };
 
-const SocialCard = ({ stimulus, onElementClick, investigations, showResults }: BaseCardProps) => {
+const SocialCard = ({ stimulus, onElementClick, investigations, showResults, tutorialHighlightSender }: BaseCardProps) => {
   return (
     <div className="w-full h-full bg-slate-900 flex flex-col font-sans relative overflow-hidden select-none text-white">
       <div className="bg-slate-800 border-b border-slate-700 px-4 py-4 pt-6 flex items-center justify-between shadow-md z-10 w-full pointer-events-none">
@@ -252,7 +256,7 @@ const SocialCard = ({ stimulus, onElementClick, investigations, showResults }: B
                {stimulus.sender.text.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1">
-               <InvestigateableElement id="sender" onElementClick={onElementClick} investigation={investigations['sender']} showResults={showResults} actualStatus={stimulus.sender.isSuspicious} className="flex flex-col w-full px-1">
+               <InvestigateableElement id="sender" onElementClick={onElementClick} investigation={investigations['sender']} showResults={showResults} actualStatus={stimulus.sender.isSuspicious} isHighlighted={tutorialHighlightSender} className="flex flex-col w-full px-1">
                   <div className="font-bold text-[16px] text-white flex items-center gap-1">{stimulus.sender.text.split('@')[0]} <span className="w-3 h-3 bg-blue-500 rounded-full inline-block"></span></div>
                   <div className="text-sm text-slate-400 truncate">{stimulus.sender.text}</div>
                </InvestigateableElement>
@@ -280,16 +284,23 @@ interface Props {
   onElementClick?: (id: ElementId) => void;
   investigations?: Partial<Record<ElementId, InvestigationData>>;
   showResults?: boolean;
+  tutorialHighlightSender?: boolean; // Tutorial: highlight the sender element
 }
 
-export const StimulusCardRenderer: React.FC<Props> = ({ stimulus, onElementClick, investigations = {} as any, showResults }) => {
+export const StimulusCardRenderer: React.FC<Props> = ({ stimulus, onElementClick, investigations = {} as any, showResults, tutorialHighlightSender }) => {
   return (
     <div className="w-full h-full bg-white flex flex-col relative">
-      {stimulus.type === 'WHATSAPP' && <WhatsAppCard stimulus={stimulus} onElementClick={onElementClick} investigations={investigations} showResults={showResults} />}
-      {stimulus.type === 'SMS' && <SMSCard stimulus={stimulus} onElementClick={onElementClick} investigations={investigations} showResults={showResults} />}
-      {stimulus.type === 'EMAIL' && <EmailCard stimulus={stimulus} onElementClick={onElementClick} investigations={investigations} showResults={showResults} />}
-      {stimulus.type === 'UPI' && <UPICard stimulus={stimulus} onElementClick={onElementClick} investigations={investigations} showResults={showResults} />}
-      {stimulus.type === 'SOCIAL' && <SocialCard stimulus={stimulus} onElementClick={onElementClick} investigations={investigations} showResults={showResults} />}
+      <style>{`
+        @keyframes tutorial-pulse {
+          0%, 100% { box-shadow: 0 0 8px 2px rgba(6, 182, 212, 0.6); }
+          50% { box-shadow: 0 0 20px 6px rgba(6, 182, 212, 0.3); }
+        }
+      `}</style>
+      {stimulus.type === 'WHATSAPP' && <WhatsAppCard stimulus={stimulus} onElementClick={onElementClick} investigations={investigations} showResults={showResults} tutorialHighlightSender={tutorialHighlightSender} />}
+      {stimulus.type === 'SMS' && <SMSCard stimulus={stimulus} onElementClick={onElementClick} investigations={investigations} showResults={showResults} tutorialHighlightSender={tutorialHighlightSender} />}
+      {stimulus.type === 'EMAIL' && <EmailCard stimulus={stimulus} onElementClick={onElementClick} investigations={investigations} showResults={showResults} tutorialHighlightSender={tutorialHighlightSender} />}
+      {stimulus.type === 'UPI' && <UPICard stimulus={stimulus} onElementClick={onElementClick} investigations={investigations} showResults={showResults} tutorialHighlightSender={tutorialHighlightSender} />}
+      {stimulus.type === 'SOCIAL' && <SocialCard stimulus={stimulus} onElementClick={onElementClick} investigations={investigations} showResults={showResults} tutorialHighlightSender={tutorialHighlightSender} />}
     </div>
   );
 };

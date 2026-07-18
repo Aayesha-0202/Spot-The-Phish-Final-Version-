@@ -111,3 +111,13 @@ export function getOrCreatePlayerId(): string {
     return newId('p');
   }
 }
+
+/** Generate a fresh player id and persist it (used when switching accounts). */
+export function resetPlayerId(): string {
+  const KEY = 'stp_player_id';
+  const id = newId('p');
+  try {
+    localStorage.setItem(KEY, id);
+  } catch { /* ignore */ }
+  return id;
+}

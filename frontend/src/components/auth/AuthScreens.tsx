@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogIn, UserPlus, Mail, Lock, User, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
+import { LogIn, UserPlus, Mail, Lock, User, ArrowLeft, AlertTriangle, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import logoUrl from '../../assets/ZeTheta logo.jpg';
+import logoUrl from '../../assets/Zetheta Logo.png';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
@@ -37,7 +37,7 @@ function GoogleButton() {
           }
         },
       });
-      g.accounts.id.renderButton(ref.current, { theme: 'outline', size: 'large', width: 320, text: 'continue_with' });
+      g.accounts.id.renderButton(ref.current, { theme: 'outline', size: 'large', width: Math.min(320, ref.current?.parentElement?.clientWidth || 320), text: 'continue_with' });
       setAvailable(true);
     };
 
@@ -55,7 +55,7 @@ function GoogleButton() {
   }, [googleLogin, navigate]);
 
   if (!GOOGLE_CLIENT_ID) {
-    return <p className="text-center text-[10px] uppercase tracking-widest text-slate-500 font-mono">Google login not configured</p>;
+    return null;
   }
   return <div ref={ref} className="flex justify-center min-h-[40px]" style={{ opacity: available ? 1 : 0.4 }} />;
 }
@@ -70,9 +70,8 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
     <div className="flex flex-col items-center justify-center min-h-screen px-4 py-12 relative z-10 bg-cyber-grid bg-[#0d0d1a]">
       <div className="absolute top-0 w-full h-2 bg-gradient-to-r from-pink-500 via-cyan-400 to-yellow-400 opacity-80" />
 
-      <div className="absolute top-5 left-5 md:top-8 md:left-10 z-20 flex items-center gap-3">
-        <img src={logoUrl} alt="ZeTheta Logo" className="w-24 h-24 md:w-32 md:h-32 object-contain" />
-        <span className="font-display font-black tracking-[0.3em] text-cyan-300 text-sm uppercase">Spot the Phish</span>
+      <div className="absolute -top-6 left-6 md:-top-6 md:left-12 z-20 p-2">
+        <img src={logoUrl} alt="ZeTheta Logo" className="w-44 h-44 md:w-72 md:h-72 object-contain" />
       </div>
 
       <motion.div
@@ -88,7 +87,7 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
 
         <div className="my-6 flex items-center gap-3">
           <div className="flex-1 h-px bg-slate-700" />
-          <span className="text-[10px] uppercase tracking-widest text-slate-500 font-mono">or</span>
+          <span className="text-[12px] uppercase tracking-widest text-slate-500 font-mono">or</span>
           <div className="flex-1 h-px bg-slate-700" />
         </div>
 
@@ -116,6 +115,28 @@ function Field({ icon, ...props }: { icon: React.ReactNode } & React.InputHTMLAt
         {...props}
         className="w-full bg-black/50 border border-cyan-500/40 text-white placeholder-slate-500 p-3 pl-10 text-sm font-mono focus:border-cyan-400 outline-none cyber-clip"
       />
+    </div>
+  );
+}
+
+function PasswordField({ icon, ...props }: { icon: React.ReactNode } & React.InputHTMLAttributes<HTMLInputElement>) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-cyan-400/70">{icon}</span>
+      <input
+        {...props}
+        type={visible ? 'text' : 'password'}
+        className="w-full bg-black/50 border border-cyan-500/40 text-white placeholder-slate-500 p-3 pl-10 pr-10 text-sm font-mono focus:border-cyan-400 outline-none cyber-clip"
+      />
+      <button
+        type="button"
+        onClick={() => setVisible(v => !v)}
+        className="absolute right-2 top-1/2 -translate-y-1/2 text-cyan-400/70 hover:text-cyan-300 transition-colors p-2 -m-2"
+        tabIndex={-1}
+      >
+        {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+      </button>
     </div>
   );
 }
@@ -155,7 +176,7 @@ export const LoginScreen = () => {
     <AuthShell title="Access Terminal" subtitle="Authenticate to enter the assessment module.">
       <form onSubmit={submit} className="space-y-4">
         <Field icon={<Mail className="w-4 h-4" />} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <Field icon={<Lock className="w-4 h-4" />} type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <PasswordField icon={<Lock className="w-4 h-4" />} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <div className="flex justify-end">
           <Link to="/auth/forgot-password" className="text-xs text-pink-300/80 hover:text-pink-200 font-mono">Forgot password?</Link>
         </div>
@@ -199,7 +220,7 @@ export const SignupScreen = () => {
       <form onSubmit={submit} className="space-y-4">
         <Field icon={<User className="w-4 h-4" />} placeholder="Codename" value={username} onChange={(e) => setUsername(e.target.value)} required />
         <Field icon={<Mail className="w-4 h-4" />} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <Field icon={<Lock className="w-4 h-4" />} type="password" placeholder="Password (min 8 chars)" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <PasswordField icon={<Lock className="w-4 h-4" />} placeholder="Password (min 8 chars)" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <Feedback error={error} />
         <button type="submit" disabled={loading} className="w-full cyber-clip py-3 bg-yellow-400 text-black font-display font-black uppercase tracking-widest hover:bg-yellow-300 disabled:opacity-60 flex justify-center items-center gap-2 transition-all cyber-glow-yellow">
           <UserPlus className="w-5 h-5" /> {loading ? 'Creating...' : 'Create Account'}
@@ -279,7 +300,7 @@ export const ResetPasswordScreen = () => {
     <AuthShell title="New Password" subtitle="Choose a new password for your account.">
       <form onSubmit={submit} className="space-y-4">
         {!token && <Feedback error="Missing reset token — use the link from your email." />}
-        <Field icon={<Lock className="w-4 h-4" />} type="password" placeholder="New password (min 8 chars)" value={password} onChange={(e) => setPassword(e.target.value)} required disabled={!token} />
+        <PasswordField icon={<Lock className="w-4 h-4" />} placeholder="New password (min 8 chars)" value={password} onChange={(e) => setPassword(e.target.value)} required disabled={!token} />
         <Feedback error={error} success={success} />
         <button type="submit" disabled={loading || !token} className="w-full cyber-clip py-3 bg-yellow-400 text-black font-display font-black uppercase tracking-widest hover:bg-yellow-300 disabled:opacity-60 flex justify-center items-center gap-2 transition-all cyber-glow-yellow">
           <Lock className="w-5 h-5" /> {loading ? 'Resetting...' : 'Reset Password'}

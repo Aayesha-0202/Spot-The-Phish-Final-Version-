@@ -18,17 +18,31 @@ export function getMailer(): Transporter {
     transporter = nodemailer.createTransport({
       host: env.SMTP_HOST,
       port: env.SMTP_PORT,
-      secure: env.SMTP_SECURE, // true for 465, false for 587 (STARTTLS)
-      auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
+      secure: env.SMTP_SECURE,
+      auth: env.SMTP_USER
+        ? {
+            user: env.SMTP_USER,
+            pass: env.SMTP_PASS,
+          }
+        : undefined,
+      tls: {
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2',
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
     });
   } else {
-    // Dev fallback: messages go to the console instead of a real mailbox.
     transporter = nodemailer.createTransport({
       streamTransport: true,
       newline: 'unix',
       buffer: true,
     });
-    logger.warn('⚠️ SMTP_HOST not set — emails will be logged to the console, not delivered.');
+
+    logger.warn(
+      '⚠️ SMTP_HOST not set — emails will be logged to the console, not delivered.'
+    );
   }
 
   return transporter;

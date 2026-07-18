@@ -6,7 +6,8 @@ import { sendSuccess, sendCreated } from '../utils/response';
 /** POST /api/leaderboard/submit — submit a completed session (server-scored). */
 export const submit = asyncHandler(async (req: Request, res: Response, _next: NextFunction) => {
   const { sessionId, clientScore } = req.body;
-  const result = await leaderboardService.submit(sessionId, req.user!._id, clientScore);
+  const userId = req.user?._id;
+  const result = await leaderboardService.submit(sessionId, userId, clientScore);
   return sendCreated(res, result, 'Score submitted');
 });
 
@@ -16,6 +17,7 @@ export const top = asyncHandler(async (req: Request, res: Response, _next: NextF
   const period = (req.query.period as 'today' | 'week' | 'month' | 'all') || 'all';
   const offset = Math.max(0, Number(req.query.offset) || 0);
   const currentUserId = req.user?._id;
+  await leaderboardService.ensureNoDuplicates();
   const rows = await leaderboardService.top(limit, period, offset, currentUserId);
   return sendSuccess(res, { entries: rows, period, limit, offset }, 'Leaderboard');
 });
@@ -24,6 +26,7 @@ export const top = asyncHandler(async (req: Request, res: Response, _next: NextF
 export const recent = asyncHandler(async (req: Request, res: Response, _next: NextFunction) => {
   const limit = Math.min(Number(req.query.limit) || 10, 100);
   const currentUserId = req.user?._id;
+  await leaderboardService.ensureNoDuplicates();
   const rows = await leaderboardService.recent(limit, currentUserId);
   return sendSuccess(res, { entries: rows, limit }, 'Recent leaderboard');
 });
@@ -44,6 +47,7 @@ export const myBest = asyncHandler(async (req: Request, res: Response, _next: Ne
 export const byPeriod = asyncHandler(async (req: Request, res: Response, _next: NextFunction) => {
   const period = (req.query.period as 'today' | 'week' | 'month' | 'all') || 'all';
   const currentUserId = req.user?._id;
+  await leaderboardService.ensureNoDuplicates();
   const rows = await leaderboardService.top(50, period, 0, currentUserId);
   return sendSuccess(res, { entries: rows, period }, `Leaderboard (${period})`);
 });

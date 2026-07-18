@@ -1,9 +1,17 @@
 import { Schema, model } from 'mongoose';
 import { IStimulus } from '../types';
 
+const elementDataSchema = new Schema({
+  text: { type: String, default: '' },
+  isSuspicious: { type: Boolean, default: false },
+  reason: { type: String },
+  explanation: { type: String, default: '' },
+}, { _id: false });
+
 /**
- * Stimulus content library (DynamoDB-shaped metadata mirrored in MongoDB).
- * Seeds from backend/src/data/stimuli.ts (npm run seed).
+ * Stimulus content library.
+ * Stores full content (sender, body, URL, etc.) so admin can view/edit
+ * without relying on the frontend static data file.
  */
 const stimulusSchema = new Schema<IStimulus>(
   {
@@ -12,12 +20,20 @@ const stimulusSchema = new Schema<IStimulus>(
     category: { type: String, required: true, index: true },
     tier: { type: Number, required: true, min: 1, max: 5, index: true },
     truthClass: { type: String, enum: ['phish', 'legit'], required: true, index: true },
-    cueList: { type: [String], default: [] }, // human-readable cue descriptors
-    calibration: { type: Schema.Types.Mixed, default: {} }, // e.g. per-cue weights / difficulty params
-    renderedAssets: { type: Schema.Types.Mixed, default: {} }, // pre-rendered image/text artefact refs
+    // Full content fields
+    sender: { type: elementDataSchema },
+    content: { type: elementDataSchema },
+    actionUrl: { type: elementDataSchema },
+    actionText: { type: elementDataSchema },
+    amount: { type: elementDataSchema },
+    explanation: { type: String, default: '' },
+    // Metadata
+    cueList: { type: [String], default: [] },
+    calibration: { type: Schema.Types.Mixed, default: {} },
+    renderedAssets: { type: Schema.Types.Mixed, default: {} },
     language: { type: String, default: 'en' },
     status: { type: String, enum: ['active', 'draft', 'retired'], default: 'active', index: true },
-    exposureCount: { type: Number, default: 0 }, // total times shown across all sessions
+    exposureCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

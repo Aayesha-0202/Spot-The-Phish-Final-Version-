@@ -30,7 +30,7 @@ export const attemptSchema = z.object({
   correctAnswer: z.unknown().optional(),
   investigations: z.unknown().optional(),
   isCorrect: z.boolean().default(false),
-  scoreAwarded: z.number().min(0).default(0),
+  scoreAwarded: z.number().default(0),
   responseTimeMs: z.number().int().min(0).optional(),
 });
 
@@ -44,7 +44,7 @@ export const progressSchema = z.object({
 });
 
 export const finishSessionSchema = progressSchema.extend({
-  totalScore: z.number().min(0),
+  totalScore: z.number(),
   designation: z.string().optional(),
   readinessLevel: readinessEnum.optional(),
   completedLevels: z.number().int().min(0).max(5),
@@ -78,7 +78,6 @@ export const reportSchema = z.object({
 
 /** Email report — payload for POST /api/sessions/:sessionId/email-report. */
 export const emailReportSchema = z.object({
-  playerName: z.string().max(40).optional(),
   compositeScore: z.number().min(0).optional(),
   designation: z.string().optional(),
   reportSummary: z.string().optional(),

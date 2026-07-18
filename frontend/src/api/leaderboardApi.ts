@@ -16,6 +16,7 @@ export interface LeaderboardRow {
   avgResponseTimeMs?: number;
   completionTimeMs?: number;
   completedAt: string;
+  gamesPlayed?: number;
   isCurrentUser?: boolean;
 }
 

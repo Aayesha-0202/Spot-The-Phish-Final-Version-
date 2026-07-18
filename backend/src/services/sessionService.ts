@@ -28,7 +28,15 @@ async function requireSession(sessionId: string) {
 export async function startSession(sessionId: string, playerId: string) {
   const player = await resolvePlayerId(playerId);
   const existing = await GameSession.findOne({ sessionId });
-  if (existing) return existing;
+  if (existing) {
+    // Link user if the player has one and the session doesn't (handles
+    // guest-played-then-logged-in flow where upsertPlayer set the link after session creation).
+    if (player.user && !existing.user) {
+      existing.user = player.user as any;
+      await existing.save();
+    }
+    return existing;
+  }
   return GameSession.create({
     sessionId,
     player: player._id,

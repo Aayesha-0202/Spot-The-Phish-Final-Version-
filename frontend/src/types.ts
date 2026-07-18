@@ -31,6 +31,29 @@ export type StimulusCategory =
   | 'KYC Updates'
   | 'Insurance'
   | 'Mutual Funds'
+  | 'Lottery / Prize'
+  | 'Shopping / Cashback'
+  | 'Cloud File Sharing'
+  | 'Fake Invoice PDFs'
+  | 'Microsoft 365 Login'
+  | 'Internship / Resume'
+  | 'Browser Notifications'
+  | 'Software Updates'
+  | 'GitHub Notifications'
+  | 'Security Dashboards'
+  | 'Fake CAPTCHA'
+  | 'QR Payment Scams'
+  | 'Fake App Downloads'
+  | 'Fake WiFi Login'
+  | 'Calendar Invites'
+  | 'Government Certificates'
+  | 'AI Assistant Messages'
+  | 'Advanced Login Pages'
+  | 'Advanced Cloud Sharing'
+  | 'Crypto Dashboards'
+  | 'E-commerce Seller Panels'
+  | 'Browser Security Alerts'
+  | 'Banking Dashboards'
   | 'Other / Service';
 
 export interface Stimulus {
@@ -56,9 +79,10 @@ export type GamePhase = 'LOBBY' | 'INTRO' | 'TUTORIAL' | 'PLAYING' | 'INVESTIGAT
 export interface GameHistoryEntry {
   stimulusId: string;
   investigations: Partial<Record<ElementId, InvestigationData>>;
-  scoreChange: number; // proportional score awarded (0-10)
+  scoreChange: number; // proportional score awarded (can be negative on wrong answers)
   streakMultiplier: number; // multiplier applied to this stimulus
   isCorrect: boolean; // score >= 8 (80%+) drives the streak
+  attemptNumber: number; // 1 = first attempt (full points), 2+ = subsequent (0 points)
   roundNumber?: number; // which round (1-5) this stimulus was in
   responseTimeMs?: number; // time taken for this stimulus
 }
@@ -74,6 +98,7 @@ export interface GameState {
   playerName: string; // entered on the landing screen — shown on the report/share image
   score: number; // live composite score (0-150 max)
   streak: number; // consecutive correct stimuli (drives the streak multiplier)
+  noInvestigationStreak: number; // consecutive empty submits (triggers warning at 3)
   currentRound: number;
   currentStimulusIndex: number;
   usedStimuliIds: string[]; // stimuli already shown this run — prevents repeats

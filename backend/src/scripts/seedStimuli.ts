@@ -35,6 +35,13 @@ async function main() {
           tier: s.difficultyTier,
           truthClass,
           cueList,
+          // Full content fields (so admin can view/edit without frontend static file)
+          sender: s.sender ? { text: s.sender.text, isSuspicious: s.sender.isSuspicious, reason: s.sender.reason, explanation: s.sender.explanation } : undefined,
+          content: s.content ? { text: s.content.text, isSuspicious: s.content.isSuspicious, reason: s.content.reason, explanation: s.content.explanation } : undefined,
+          actionUrl: s.actionUrl ? { text: s.actionUrl.text, isSuspicious: s.actionUrl.isSuspicious, reason: s.actionUrl.reason, explanation: s.actionUrl.explanation } : undefined,
+          actionText: s.actionText ? { text: s.actionText.text, isSuspicious: s.actionText.isSuspicious, reason: s.actionText.reason, explanation: s.actionText.explanation } : undefined,
+          amount: s.amount ? { text: s.amount.text, isSuspicious: s.amount.isSuspicious, reason: s.amount.reason, explanation: s.amount.explanation } : undefined,
+          explanation: s.explanation,
           calibration: { basePoints: 10 },
           renderedAssets: {},
           language: 'en',

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { useAuthStore } from '../../store/authStore';
-import { Crosshair, Play, ArrowRight, Zap, AlertTriangle, Search, Info, X, Mail, User, HelpCircle, SkipForward } from 'lucide-react';
+import { Crosshair, Play, ArrowRight, Zap, AlertTriangle, Search, Info, X, Mail, User, HelpCircle, SkipForward, Pencil } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import logoUrl from '../../assets/ZeTheta logo.jpg';
+import logoUrl from '../../assets/Zetheta Logo.png';
 
 const CONSENT_ITEMS = [
   { key: 'dpdp', label: 'Acknowledge DPDP Privacy Act' },
@@ -18,7 +18,7 @@ const CONSENT_DETAILS: Record<string, string> = {
 };
 
 export const LobbyScreen = () => {
-  const { startTutorial, startGame, playerName, setPlayerName, playerEmail, setPlayerEmail } = useGameStore();
+  const { startTutorial, startGame, playerName, setPlayerName, playerEmail, setPlayerEmail, codenameRestored, loadPlayerProfile } = useGameStore();
   const { isAuthenticated, isGuest, user } = useAuthStore();
   const [agreed, setAgreed] = useState({
     dpdp: false,
@@ -28,6 +28,7 @@ export const LobbyScreen = () => {
   const [openInfo, setOpenInfo] = useState<string | null>(null);
   const [showIntro, setShowIntro] = useState(false);
   const [showWhy, setShowWhy] = useState(false);
+  const [editingCodename, setEditingCodename] = useState(false);
 
   // Optional email → persisted to the backend so the report can be auto-emailed.
   const [linkEmail, setLinkEmail] = useState(false);
@@ -36,6 +37,11 @@ export const LobbyScreen = () => {
   const codenameValid = playerName.trim().length > 0;
   const allAgreed = agreed.dpdp && agreed.record && agreed.academic && codenameValid;
   const remainingCount = (agreed.dpdp ? 0 : 1) + (agreed.record ? 0 : 1) + (agreed.academic ? 0 : 1) + (codenameValid ? 0 : 1);
+
+  // Restore saved codename from backend on mount
+  useEffect(() => {
+    loadPlayerProfile();
+  }, [loadPlayerProfile]);
 
   const handlePlayClick = () => {
     setShowIntro(true);
@@ -47,8 +53,8 @@ export const LobbyScreen = () => {
       <div className="absolute top-0 w-full h-2 bg-gradient-to-r from-pink-500 via-cyan-400 to-yellow-400 opacity-80" />
 
       {/* Brand logo — top-left corner of the landing screen */}
-      <div className="absolute top-5 left-5 md:top-8 md:left-10 z-20" aria-label="Spot the Phish logo">
-        <img src={logoUrl} alt="ZeTheta Logo" className="w-32 h-32 md:w-48 md:h-48 object-contain" />
+      <div className="absolute -top-10 left-4 md:-top-9 md:left-8 z-20 p-2" aria-label="Spot the Phish logo">
+        <img src={logoUrl} alt="ZeTheta Logo" className="w-24 h-24 md:w-56 md:h-56 object-contain" />
       </div>
 
       <AnimatePresence mode="wait">
@@ -57,13 +63,12 @@ export const LobbyScreen = () => {
             <motion.div initial={{ opacity: 0, y: -30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="w-full max-w-4xl flex flex-col items-center text-center">
 
               <div className="flex items-center gap-2 opacity-90 mb-6 border-b-2 border-cyan-400 px-6 py-2 uppercase tracking-[0.3em] text-xs font-black text-cyan-300 font-display">
-                <img src={logoUrl} alt="" className="w-6 h-6 object-contain" />
                 Neural Assessment Module
               </div>
 
               {/* Game title now occupies the former logo position (no duplicate title) */}
               <div className="mb-8 w-full flex flex-col items-center justify-center">
-                <h1 className="text-7xl md:text-8xl font-black text-yellow-400 font-display italic tracking-tight cyber-glow-text-yellow flex flex-col md:flex-row items-center justify-center gap-4 uppercase">
+                <h1 className="text-5xl md:text-7xl font-black text-yellow-400 font-display italic tracking-tight cyber-glow-text-yellow flex flex-col md:flex-row items-center justify-center gap-4 uppercase">
                   <span>Spot</span>
                   <span className="text-white cyber-glow-text">The</span>
                   <span className="text-pink-500 cyber-glow-text-pink">Phish</span>
@@ -85,14 +90,30 @@ export const LobbyScreen = () => {
                     <span className="text-sm font-bold text-white uppercase tracking-widest font-display">Player Profile</span>
                   </div>
                   <div className="flex flex-col gap-3">
-                    <input
-                      value={playerName}
-                      onChange={e => setPlayerName(e.target.value)}
-                      placeholder="Codename *"
-                      className="w-full bg-black/50 border border-cyan-500/40 text-white placeholder-slate-500 p-3 text-sm font-mono focus:border-cyan-400 outline-none cyber-clip"
-                    />
+                    {codenameRestored && !editingCodename ? (
+                      <div className="flex items-center gap-2 bg-black/50 border border-cyan-500/40 p-3 cyber-clip">
+                        <User className="w-4 h-4 text-cyan-400 shrink-0" />
+                        <span className="text-white font-mono text-sm flex-1 truncate">{playerName}</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditingCodename(true)}
+                          className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-cyan-300/80 hover:text-cyan-200 font-bold transition-colors shrink-0"
+                        >
+                          <Pencil className="w-3.5 h-3.5" /> Edit
+                        </button>
+                      </div>
+                    ) : (
+                      <input
+                        value={playerName}
+                        onChange={e => setPlayerName(e.target.value)}
+                        onBlur={() => { if (playerName.trim()) setEditingCodename(false); }}
+                        placeholder="Codename *"
+                        autoFocus={editingCodename}
+                        className="w-full bg-black/50 border border-cyan-500/40 text-white placeholder-slate-500 p-3 text-sm font-mono focus:border-cyan-400 outline-none cyber-clip"
+                      />
+                    )}
                     {!codenameValid && (
-                      <p className="text-yellow-400 text-[10px] mt-1 font-mono">A codename is required to start the game.</p>
+                      <p className="text-yellow-400 text-[12px] mt-1 font-mono">A codename is required to start the game.</p>
                     )}
                     <button
                       type="button"
@@ -119,10 +140,10 @@ export const LobbyScreen = () => {
                             }`}
                           />
                           {!emailValid && (
-                            <p className="text-red-400 text-[10px] mt-1 font-mono">Please enter a valid email address.</p>
+                            <p className="text-red-400 text-[12px] mt-1 font-mono">Please enter a valid email address.</p>
                           )}
                           {emailValid && playerEmail && (
-                            <p className="text-green-300/80 text-[10px] mt-2 font-mono leading-relaxed">
+                            <p className="text-green-300/80 text-[12px] mt-2 font-mono leading-relaxed">
                               ✉️ Your personalized report will be emailed to you after you complete the assessment.
                             </p>
                           )}
@@ -130,7 +151,7 @@ export const LobbyScreen = () => {
                       )}
                     </AnimatePresence>
                   </div>
-                  <p className="mt-3 text-[10px] uppercase tracking-widest text-slate-500 font-mono">
+                  <p className="mt-3 text-[12px] uppercase tracking-widest text-slate-500 font-mono">
                     {isAuthenticated
                       ? `Signed in as ${user?.email || user?.username || 'Unknown'} — scores count on the leaderboard`
                       : isGuest
@@ -142,7 +163,7 @@ export const LobbyScreen = () => {
             </motion.div>
 
             <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }} className="w-full max-w-lg">
-              <div className="cyber-clip bg-[#0d0d1a] border-2 border-pink-500/50 p-8 md:p-10 relative overflow-hidden group">
+              <div className="cyber-clip bg-[#0d0d1a] border-2 border-pink-500/50 p-4 md:p-8 md:p-10 relative overflow-hidden group">
 
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-pink-500 to-transparent opacity-50" />
                 <div className="absolute top-0 right-0 w-16 h-16 bg-pink-500/10 blur-xl" />
@@ -153,7 +174,7 @@ export const LobbyScreen = () => {
                 </div>
 
                 {/* Explicit instruction so users know exactly what to do */}
-                <p className="text-[11px] md:text-xs text-pink-200/60 mb-5 uppercase tracking-[0.2em] font-bold flex items-center gap-2">
+                <p className="text-[13px] md:text-xs text-pink-200/60 mb-5 uppercase tracking-[0.2em] font-bold flex items-center gap-2">
                   <Crosshair className="w-3.5 h-3.5" /> Confirm all 3 protocols below to unlock PLAY
                 </p>
 
@@ -186,7 +207,7 @@ export const LobbyScreen = () => {
                               initial={{ height: 0, opacity: 0 }}
                               animate={{ height: 'auto', opacity: 1 }}
                               exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden text-[11px] md:text-xs text-cyan-200/60 leading-relaxed px-3 pb-2 font-mono normal-case tracking-normal"
+                              className="overflow-hidden text-[13px] md:text-xs text-cyan-200/60 leading-relaxed px-3 pb-2 font-mono normal-case tracking-normal"
                             >
                               {CONSENT_DETAILS[key]}
                             </motion.p>
@@ -208,11 +229,11 @@ export const LobbyScreen = () => {
                   </button>
                   {!allAgreed && (
                     <>
-                      <div className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#0d0d1a] border border-yellow-400/50 px-3 py-2 text-[10px] uppercase tracking-widest text-yellow-300 whitespace-nowrap cyber-clip z-20 shadow-lg">
+                      <div className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#0d0d1a] border border-yellow-400/50 px-3 py-2 text-[12px] uppercase tracking-widest text-yellow-300 whitespace-nowrap cyber-clip z-20 shadow-lg">
                         🔒 {remainingCount} protocol{remainingCount > 1 ? 's' : ''} left to confirm
                         <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-[#0d0d1a] border-r border-b border-yellow-400/50 rotate-45" />
                       </div>
-                      <p className="mt-3 text-center text-[10px] uppercase tracking-widest text-slate-500 font-mono">Play unlocks when all protocols are confirmed</p>
+                      <p className="mt-3 text-center text-[12px] uppercase tracking-widest text-slate-500 font-mono">Play unlocks when all protocols are confirmed</p>
                     </>
                   )}
                 </div>
@@ -232,7 +253,7 @@ export const LobbyScreen = () => {
 
             {/* Clear heading to set expectations before the steps */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-center">
-              <div className="inline-flex items-center gap-2 border-b-2 border-cyan-400 px-4 py-1 uppercase tracking-[0.3em] text-[10px] font-black text-cyan-300 font-display mb-4">
+              <div className="inline-flex items-center gap-2 border-b-2 border-cyan-400 px-4 py-1 uppercase tracking-[0.3em] text-[12px] font-black text-cyan-300 font-display mb-4">
                 <Search className="w-3.5 h-3.5" /> Mission Briefing
               </div>
               <h2 className="text-3xl md:text-5xl font-display font-black text-white uppercase tracking-widest cyber-glow-text">How To Play</h2>
@@ -273,10 +294,10 @@ export const LobbyScreen = () => {
                   <Zap className="w-8 h-8 text-pink-500" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-pink-500 uppercase tracking-widest font-display mb-2">3. Earn Points &amp; Survive</h3>
-                  <p className="text-pink-100/80 leading-relaxed font-mono text-sm md:text-base">
-                    Correctly identifying threats earns you points toward your score. Missing obvious scams or falsely accusing legitimate messages will cost you one of your 3 lives. Lose all 3, and your investigation ends.
-                  </p>
+                   <h3 className="text-xl font-bold text-pink-500 uppercase tracking-widest font-display mb-2">3. Earn Points</h3>
+                   <p className="text-pink-100/80 leading-relaxed font-mono text-sm md:text-base">
+                     Correctly identifying threats earns you points toward your score. Build a streak of correct answers for multiplier bonuses. Missing obvious scams or falsely accusing legitimate messages will reduce your score.
+                   </p>
                 </div>
               </div>
             </motion.div>
@@ -300,7 +321,7 @@ export const LobbyScreen = () => {
                 <SkipForward className="w-5 h-5" /> Skip Tutorial
               </button>
             </motion.div>
-            <p className="text-center text-[10px] uppercase tracking-widest text-slate-500 font-mono -mt-2">Returning user? Skip straight to the real investigation.</p>
+            <p className="text-center text-[12px] uppercase tracking-widest text-slate-500 font-mono -mt-2">Returning user? Skip straight to the real investigation.</p>
           </motion.div>
         )}
       </AnimatePresence>

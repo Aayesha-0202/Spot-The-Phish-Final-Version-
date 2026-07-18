@@ -147,12 +147,27 @@ export interface IRound extends Document {
 export type TruthClass = 'phish' | 'legit';
 export type StimulusStatus = 'active' | 'draft' | 'retired';
 
+export interface IElementData {
+  text: string;
+  isSuspicious: boolean;
+  reason?: string;
+  explanation: string;
+}
+
 export interface IStimulus extends Document {
   stimulusId: string;
   type?: string;
   category: string;
   tier: number;
   truthClass: TruthClass;
+  // Full content fields (match frontend Stimulus type)
+  sender?: IElementData;
+  content?: IElementData;
+  actionUrl?: IElementData;
+  actionText?: IElementData;
+  amount?: IElementData;
+  explanation?: string;
+  // Metadata
   cueList: string[];
   calibration: Record<string, unknown>;
   renderedAssets: Record<string, unknown>;
@@ -177,7 +192,8 @@ export interface IExposureCounter extends Document {
 export interface ILeaderboardEntry extends Document {
   user?: Types.ObjectId | null;
   playerId: string;
-  playerName: string;
+  /** @deprecated Codename is now fetched live from the Player model via $lookup. */
+  playerName?: string;
   sessionId: string;
   compositeScore: number;
   designation?: string;
@@ -188,6 +204,31 @@ export interface ILeaderboardEntry extends Document {
   avgResponseTimeMs?: number;
   completionTimeMs?: number;  // total game duration in ms (used for leaderboard tiebreaking)
   completedAt: Date;
+  gamesPlayed: number;        // number of fully-completed games submitted
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ---------------------------------------------------------------------------
+// Player Stimulus History (rotation system)
+// ---------------------------------------------------------------------------
+export interface IPlayerStimulusHistory extends Document {
+  playerId: string;
+  tier1Seen: string[];
+  tier2Seen: string[];
+  tier3Seen: string[];
+  tier4Seen: string[];
+  tier5Seen: string[];
+  gamesPlayed: number;
+  totalStimuliSeen: number;
+  lastPlayedAt?: Date;
+  lastGameplayStimuli: {
+    tier1: string[];
+    tier2: string[];
+    tier3: string[];
+    tier4: string[];
+    tier5: string[];
+  };
   createdAt: Date;
   updatedAt: Date;
 }
